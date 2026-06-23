@@ -5,16 +5,18 @@ import { MD_EXTENSIONS } from './fs-scan'
 let watcher: FSWatcher | null = null
 
 /**
- * Watch a folder tree for markdown changes and notify the renderer.
- * - structural events (add/unlink/dir) trigger a re-scan in the renderer
- * - content changes ('change') let the renderer reload just that file
+ * Watch one or more paths (folders and/or single files) for markdown changes
+ * and notify the renderer. Content changes emit `fs:changed`; structural
+ * changes emit `fs:tree-changed` with the affected path so the renderer can
+ * re-scan just the relevant workspace folder.
  */
-export function watchFolder(root: string, win: BrowserWindow): void {
+export function watchPaths(paths: string[], win: BrowserWindow | null): void {
   stopWatching()
+  if (!win || paths.length === 0) return
 
-  watcher = chokidar.watch(root, {
+  watcher = chokidar.watch(paths, {
     ignored: (path: string) =>
-      /(^|[/\\])\../.test(path) || // dotfiles/dirs
+      /(^|[/\\])\../.test(path) ||
       /[/\\](node_modules|dist|out|build|\.git|coverage)([/\\]|$)/.test(path),
     ignoreInitial: true,
     persistent: true,
@@ -31,13 +33,13 @@ export function watchFolder(root: string, win: BrowserWindow): void {
       if (isMd(path)) send('fs:changed', { path })
     })
     .on('add', (path) => {
-      if (isMd(path)) send('fs:tree-changed', { type: 'add', path })
+      if (isMd(path)) send('fs:tree-changed', { path })
     })
     .on('unlink', (path) => {
-      if (isMd(path)) send('fs:tree-changed', { type: 'unlink', path })
+      if (isMd(path)) send('fs:tree-changed', { path })
     })
-    .on('addDir', () => send('fs:tree-changed', { type: 'addDir' }))
-    .on('unlinkDir', () => send('fs:tree-changed', { type: 'unlinkDir' }))
+    .on('addDir', (path) => send('fs:tree-changed', { path }))
+    .on('unlinkDir', (path) => send('fs:tree-changed', { path }))
 }
 
 export function stopWatching(): void {

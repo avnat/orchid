@@ -17,7 +17,7 @@
   --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
   --mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, monospace;
 
-  --reading-width: 72rem;
+  --reading-width: 92rem;
   --font-scale: 1;
 }
 
@@ -28,7 +28,7 @@
   --text: #e8e5ef;
   --muted: #928ca0;
   --line: #29262f;
-  --code-bg: #211e2a;
+  --code-bg: #2d2a39;
   --sel: #262130;
   --accent: #ab8bf2; /* default Orchid (dark); overridden at runtime */
   --accent-soft: color-mix(in srgb, var(--accent) 20%, transparent);

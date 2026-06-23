@@ -18,13 +18,18 @@ export const ACCENTS: AccentTheme[] = [
   { key: 'iris', name: 'Iris', light: '#4f54de', dark: '#8e92f4' },
   { key: 'plum', name: 'Plum', light: '#a838c9', dark: '#cf7ce6' },
   { key: 'fuchsia', name: 'Fuchsia', light: '#d61f9e', dark: '#f25cc8' },
-  // blues
+  // blues + slate (cool, dark-friendly)
   { key: 'periwinkle', name: 'Periwinkle', light: '#5471ec', dark: '#8aa2f7' },
   { key: 'azure', name: 'Azure', light: '#1b8ae6', dark: '#57b2f5' },
-  // greens + teal
+  { key: 'slate', name: 'Slate', light: '#4f6488', dark: '#9aaece' },
+  { key: 'steel', name: 'Steel', light: '#3f6fa3', dark: '#7eaae0' },
+  // neutral
+  { key: 'graphite', name: 'Graphite', light: '#5c6676', dark: '#9ca7b7' },
+  // greens
   { key: 'lagoon', name: 'Lagoon', light: '#0aa1c2', dark: '#49c8e2' },
   { key: 'teal', name: 'Teal', light: '#0f9b91', dark: '#41c6ba' },
   { key: 'jade', name: 'Jade', light: '#12a578', dark: '#46cd9c' },
+  { key: 'pine', name: 'Pine', light: '#2f7d5e', dark: '#62b48f' },
   // warms
   { key: 'marigold', name: 'Marigold', light: '#d98e2b', dark: '#ecb55e' },
   { key: 'coral', name: 'Coral', light: '#e75a46', dark: '#f58a79' },

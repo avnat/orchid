@@ -1,6 +1,8 @@
 import { create } from 'zustand'
-import type { MdNode } from '../types'
+import type { WorkspaceFolder } from '../types'
 import type { Appearance } from '../themes'
+
+export type SortMode = 'name' | 'recent'
 
 const lsGet = (k: string, fallback: string): string => {
   try {
@@ -18,8 +20,7 @@ const lsSet = (k: string, v: string): void => {
 }
 
 interface OrchidState {
-  root: string | null
-  tree: MdNode[]
+  folders: WorkspaceFolder[]
   activePath: string | null
   /** content as shown (may include unsaved edits) */
   content: string
@@ -34,10 +35,11 @@ interface OrchidState {
   appearance: Appearance
   accentKey: string
   tocVisible: boolean
+  sortMode: SortMode
   filter: string
 
-  setFolder: (root: string, tree: MdNode[]) => void
-  setTree: (tree: MdNode[]) => void
+  setWorkspace: (folders: WorkspaceFolder[], select?: string) => void
+  setSortMode: (mode: SortMode) => void
   selectFile: (path: string) => Promise<void>
   reloadActive: () => Promise<void>
   setContent: (content: string) => void
@@ -56,9 +58,16 @@ interface OrchidState {
 const dirty = (s: { content: string; savedContent: string }): boolean =>
   s.content !== s.savedContent
 
+function flatHas(nodes: WorkspaceFolder['tree'], path: string): boolean {
+  for (const n of nodes) {
+    if (n.type === 'file' && n.path === path) return true
+    if (n.children && flatHas(n.children, path)) return true
+  }
+  return false
+}
+
 export const useStore = create<OrchidState>((set, get) => ({
-  root: null,
-  tree: [],
+  folders: [],
   activePath: null,
   content: '',
   savedContent: '',
@@ -69,10 +78,24 @@ export const useStore = create<OrchidState>((set, get) => ({
   appearance: lsGet('orchid.appearance', 'system') as Appearance,
   accentKey: lsGet('orchid.accent', 'orchid'),
   tocVisible: lsGet('orchid.toc', 'true') !== 'false',
+  sortMode: lsGet('orchid.sort', 'name') as SortMode,
   filter: '',
 
-  setFolder: (root, tree) => set({ root, tree }),
-  setTree: (tree) => set({ tree }),
+  setWorkspace: (folders, select) =>
+    set((s) => ({
+      folders,
+      // drop active selection (and any edit/conflict state) if its file no
+      // longer exists in the workspace
+      ...(select
+        ? {}
+        : s.activePath && !folders.some((f) => flatHas(f.tree, s.activePath!))
+          ? { activePath: null, content: '', savedContent: '', editMode: false, conflict: false, focusMode: false }
+          : {})
+    })),
+  setSortMode: (mode) => {
+    lsSet('orchid.sort', mode)
+    set({ sortMode: mode })
+  },
 
   selectFile: async (path) => {
     const text = await window.orchid.readFile(path)

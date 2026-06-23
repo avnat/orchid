@@ -185,7 +185,8 @@ lumen/
 - **Phase 1 — Preview spine:** ✅ react-markdown pipeline with GFM + syntax highlighting + images + sanitization + frontmatter header, refined typography & Bloom/Dusk themes following the system. *Outcome: the preview looks great.*
 - **Phase 2 — Live + edit:** ✅ (basic) chokidar watch → live reload + conflict banner; `⌘E` edit mode + split + save; `⌘.` focus mode. *Editor is a styled textarea for now — swap to CodeMirror 6 with scroll-sync next.*
 - **Phase 3 — Rich layer:** ✅ mermaid diagrams, KaTeX math, frontmatter header, TOC rail with scroll-spy, `⌘P` fuzzy switcher, CodeMirror 6 editor with scroll-sync.
-- **Phase 4 — Polish:** ✅ content search (`⌘⇧F`), export to HTML/PDF (self-contained, theme-embedded), hidable sidebar (`⌘.`) & TOC (`⌘⌥.`) with persisted state, keyboard-shortcuts panel (`⌘/`), theme-aware kachnar logo, **app icon**, and **`.dmg` packaging** (arm64, unsigned). *Remaining: reading themes/width controls, follow-mode + diff, interactive checkboxes; notarized/universal build when distributing.*
+- **Phase 4 — Polish:** ✅ content search (`⌘⇧F`), export to HTML/PDF (self-contained, theme-embedded), hidable sidebar (`⌘.`) & TOC (`⌘⌥.`) with persisted state, keyboard-shortcuts panel (`⌘/`, spelled-out keys), theme-aware kachnar logo, **app icon**, and **`.dmg` packaging**.
+- **v0.1.1:** ✅ **multi-folder workspaces** (each folder a collapsible section; add/close), **open a single file**, **refresh** + **Name/Recent sort**, wider full-bleed reading, lighter dark code blocks, calmer accent usage, expanded **16-accent** palette (incl. cool/neutral Slate · Steel · Graphite · Pine), and **ad-hoc signing** so downloads aren't flagged "damaged". *Remaining: reading-width/font controls, follow-mode + diff, interactive checkboxes; notarized/universal build for wide distribution.*
 
 ---
 
@@ -197,10 +198,10 @@ lumen/
 - Scope: **preview-first with light editing** (`⌘E` toggle + split).
 - Edit conflicts: **warn + choose** (banner).
 - Design tone: **refined, editorial & subtle** — near-monochrome cool neutrals + muted violet.
-- Accent: **configurable presets** (Slack-style), default **Orchid** Whisper violet `#7E6BB8`/`#A99AD4`. Curated 12-swatch set grouped by hue, each tuned for light + dark, saturation kept restrained for calm: violets (Orchid · Iris · Plum), blues (Lavender · Periwinkle · Azure), greens (Teal · Jade · Fern), warms (Marigold · Coral · Rose). No near-gray accent (muddies against text). Picked from a titlebar swatch popover; persisted in localStorage.
+- Accent: **configurable presets** (Slack-style), default **Orchid** violet. **16-swatch** set grouped by hue, each tuned for light + dark: violets/pink (Orchid · Iris · Plum · Fuchsia), blues + slate (Periwinkle · Azure · Slate · Steel), neutral (Graphite), greens (Lagoon · Teal · Jade · Pine), warms (Marigold · Coral · Rose). Accent reserved for meaningful spots (links, active file, callouts, TOC) — incidental elements stay neutral. Picked from a titlebar swatch popover; persisted.
 - Themes: **Bloom** (light) / **Dusk** (dark) with **Appearance = System / Bloom / Dusk** (default System).
 - Extensions: treat `.md`, `.markdown`, `.mdx` as markdown.
-- Window model: single-window, one folder at a time.
+- Window model: single window; **multi-folder workspaces** + single-file open.
 
 **Still open:**
 1. **Distribution** — personal use (unsigned) vs. eventual notarized distributable. Defer signing until distribution is needed.

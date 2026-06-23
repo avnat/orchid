@@ -68,6 +68,14 @@ export default function MarkdownView({ source }: { source: string }): JSX.Elemen
 
   const components = useMemo(
     () => ({
+      // Task-list checkboxes: render uncontrolled + disabled (display only) to
+      // avoid React's controlled→uncontrolled warning when `checked` flips.
+      input({ type, checked }: { type?: string; checked?: boolean }) {
+        if (type === 'checkbox') {
+          return <input type="checkbox" defaultChecked={!!checked} disabled />
+        }
+        return <input type={type} />
+      },
       // Render ```mermaid fences as diagrams instead of code blocks.
       pre({ children }: { children?: React.ReactNode }) {
         const child = Array.isArray(children) ? children[0] : children

@@ -15,5 +15,8 @@ mac:
         - arm64
         - x64
   artifactName: ${productName}-${version}-${arch}.${ext}
-  # Signing/notarization deferred until distribution is needed.
-  identity: null
+  identity: null # electron-builder's own signing off; we ad-hoc sign in afterPack
+# Ad-hoc sign the app so macOS doesn't flag it as "damaged" on download.
+# Friends still get a one-time "Open Anyway" (no Terminal). Full notarization
+# would need an Apple Developer account.
+afterPack: build/adhoc-sign.cjs

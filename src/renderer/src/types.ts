@@ -7,10 +7,21 @@ export interface MdNode {
   children?: MdNode[]
 }
 
+export interface WorkspaceFolder {
+  root: string
+  name: string
+  tree: MdNode[]
+  isFile?: boolean
+}
+
 export interface OrchidApi {
   openFolder: () => Promise<void>
-  openFolderPath: (path: string) => Promise<void>
-  scan: (root: string) => Promise<MdNode[]>
+  addFolder: () => Promise<void>
+  openFile: () => Promise<void>
+  openPath: (path: string) => Promise<void>
+  closeFolder: (root: string) => Promise<void>
+  refresh: () => Promise<void>
+  rescan: (changedPath: string) => Promise<void>
   readFile: (path: string) => Promise<string>
   writeFile: (path: string, content: string) => Promise<boolean>
   reveal: (path: string) => Promise<void>
@@ -19,9 +30,9 @@ export interface OrchidApi {
   search: (query: string) => Promise<SearchHit[]>
   exportHtml: (html: string, defaultName: string) => Promise<boolean>
   exportPdf: (html: string, defaultName: string) => Promise<boolean>
-  onFolderOpened: (cb: (p: { root: string; tree: MdNode[] }) => void) => () => void
+  onWorkspaceChanged: (cb: (p: { folders: WorkspaceFolder[]; select?: string }) => void) => () => void
   onFileChanged: (cb: (p: { path: string }) => void) => () => void
-  onTreeChanged: (cb: (p: { type: string; path?: string }) => void) => () => void
+  onTreeChanged: (cb: (p: { path?: string }) => void) => () => void
   onThemeChanged: (cb: (p: { shouldUseDarkColors: boolean }) => void) => () => void
   onToggleEdit: (cb: () => void) => () => void
   onSave: (cb: () => void) => () => void

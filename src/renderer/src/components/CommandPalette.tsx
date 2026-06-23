@@ -39,14 +39,14 @@ export default function CommandPalette({
   open: boolean
   onClose: () => void
 }): JSX.Element | null {
-  const tree = useStore((s) => s.tree)
+  const folders = useStore((s) => s.folders)
   const selectFile = useStore((s) => s.selectFile)
   const [query, setQuery] = useState('')
   const [index, setIndex] = useState(0)
   const inputRef = useRef<HTMLInputElement>(null)
   const listRef = useRef<HTMLUListElement>(null)
 
-  const files = useMemo(() => flatten(tree), [tree])
+  const files = useMemo(() => folders.flatMap((f) => flatten(f.tree)), [folders])
 
   const results = useMemo(() => {
     const q = query.toLowerCase()

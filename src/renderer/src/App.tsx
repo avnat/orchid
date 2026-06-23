@@ -16,8 +16,7 @@ function baseName(p: string): string {
 }
 
 export default function App(): JSX.Element {
-  const root = useStore((s) => s.root)
-  const tree = useStore((s) => s.tree)
+  const folders = useStore((s) => s.folders)
   const activePath = useStore((s) => s.activePath)
   const editMode = useStore((s) => s.editMode)
   const focusMode = useStore((s) => s.focusMode)
@@ -50,11 +49,13 @@ export default function App(): JSX.Element {
   useEffect(() => {
     const s = useStore.getState
     const offs = [
-      window.orchid.onFolderOpened(({ root, tree }) => s().setFolder(root, tree)),
+      window.orchid.onWorkspaceChanged(({ folders, select }) => {
+        s().setWorkspace(folders, select)
+        if (select) void s().selectFile(select)
+      }),
       window.orchid.onFileChanged(({ path }) => s().onExternalChange(path)),
-      window.orchid.onTreeChanged(async () => {
-        const r = s().root
-        if (r) s().setTree(await window.orchid.scan(r))
+      window.orchid.onTreeChanged(({ path }) => {
+        if (path) void window.orchid.rescan(path)
       }),
       window.orchid.onToggleEdit(() => {
         if (s().activePath) s().toggleEdit()
@@ -63,7 +64,7 @@ export default function App(): JSX.Element {
       window.orchid.onFocusMode(() => s().toggleFocus()),
       window.orchid.onToggleToc(() => s().toggleToc()),
       window.orchid.onSearch(() => {
-        if (s().root) setSearchOpen(true)
+        if (s().folders.length) setSearchOpen(true)
       }),
       window.orchid.onExportHtml(() => void doExport('html')),
       window.orchid.onExportPdf(() => void doExport('pdf')),
@@ -90,10 +91,10 @@ export default function App(): JSX.Element {
         void useStore.getState().save()
       } else if ((e.metaKey || e.ctrlKey) && e.key === 'p') {
         e.preventDefault()
-        if (useStore.getState().root) setPaletteOpen(true)
+        if (useStore.getState().folders.length) setPaletteOpen(true)
       } else if ((e.metaKey || e.ctrlKey) && e.shiftKey && (e.key === 'f' || e.key === 'F')) {
         e.preventDefault()
-        if (useStore.getState().root) setSearchOpen(true)
+        if (useStore.getState().folders.length) setSearchOpen(true)
       } else if ((e.metaKey || e.ctrlKey) && e.key === '/') {
         e.preventDefault()
         setShortcutsOpen(true)
@@ -111,8 +112,8 @@ export default function App(): JSX.Element {
     }
     const onDrop = (e: DragEvent): void => {
       prevent(e)
-      const file = e.dataTransfer?.files?.[0] as (File & { path?: string }) | undefined
-      if (file?.path) void window.orchid.openFolderPath(file.path)
+      const dropped = Array.from(e.dataTransfer?.files ?? []) as (File & { path?: string })[]
+      for (const f of dropped) if (f.path) void window.orchid.openPath(f.path)
     }
     window.addEventListener('dragover', prevent)
     window.addEventListener('drop', onDrop)
@@ -122,13 +123,22 @@ export default function App(): JSX.Element {
     }
   }, [])
 
-  const hasFolder = root && tree.length >= 0
+  const hasWorkspace = folders.length > 0
 
-  const title = root ? (
-    <>
-      <b>{baseName(root)}</b>
-      {activePath ? ` — ${activePath.slice(root.length + 1)}` : ''}
-    </>
+  const activeFolder = activePath
+    ? folders.find((f) => activePath === f.root || activePath.startsWith(f.root + '/'))
+    : undefined
+  const title = activePath ? (
+    activeFolder?.isFile ? (
+      <b>{baseName(activePath)}</b>
+    ) : (
+      <>
+        <b>{activeFolder?.name ?? ''}</b>
+        {activeFolder ? ` — ${activePath.slice(activeFolder.root.length + 1)}` : baseName(activePath)}
+      </>
+    )
+  ) : hasWorkspace ? (
+    <b>{folders.length === 1 ? folders[0].name : `${folders.length} folders`}</b>
   ) : (
     'Orchid'
   )
@@ -193,7 +203,7 @@ export default function App(): JSX.Element {
         </div>
       </div>
 
-      {!root ? (
+      {!hasWorkspace ? (
         <EmptyState />
       ) : (
         <div className={`body ${focusMode ? 'focus' : ''}`}>

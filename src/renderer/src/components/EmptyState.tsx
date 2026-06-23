@@ -13,7 +13,7 @@ export default function EmptyState(): JSX.Element {
         Open a folder
       </button>
       <p className="hint">
-        or drop a folder anywhere — press <kbd>⌘O</kbd>
+        or <button className="linkbtn" onClick={() => window.orchid.openFile()}>open a single file</button> · drop a folder or file anywhere · <kbd>⌘O</kbd>
       </p>
 
       <div className="byline">Concept by Avnee · Built by Claude</div>

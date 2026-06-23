@@ -9,6 +9,13 @@ export interface MdNode {
   children?: MdNode[]
 }
 
+export interface WorkspaceFolder {
+  root: string
+  name: string
+  tree: MdNode[]
+  isFile?: boolean
+}
+
 function on<T>(channel: string, cb: (payload: T) => void): () => void {
   const listener = (_e: IpcRendererEvent, payload: T): void => cb(payload)
   ipcRenderer.on(channel, listener)
@@ -18,8 +25,12 @@ function on<T>(channel: string, cb: (payload: T) => void): () => void {
 const api = {
   // actions
   openFolder: (): Promise<void> => ipcRenderer.invoke('dialog:openFolder'),
-  openFolderPath: (path: string): Promise<void> => ipcRenderer.invoke('folder:openPath', path),
-  scan: (root: string): Promise<MdNode[]> => ipcRenderer.invoke('fs:scan', root),
+  addFolder: (): Promise<void> => ipcRenderer.invoke('dialog:addFolder'),
+  openFile: (): Promise<void> => ipcRenderer.invoke('dialog:openFile'),
+  openPath: (path: string): Promise<void> => ipcRenderer.invoke('workspace:openPath', path),
+  closeFolder: (root: string): Promise<void> => ipcRenderer.invoke('workspace:closeFolder', root),
+  refresh: (): Promise<void> => ipcRenderer.invoke('workspace:refresh'),
+  rescan: (changedPath: string): Promise<void> => ipcRenderer.invoke('workspace:rescan', changedPath),
   readFile: (path: string): Promise<string> => ipcRenderer.invoke('fs:read', path),
   writeFile: (path: string, content: string): Promise<boolean> =>
     ipcRenderer.invoke('fs:write', path, content),
@@ -37,9 +48,10 @@ const api = {
     ipcRenderer.invoke('export:pdf', html, defaultName),
 
   // events (return an unsubscribe fn)
-  onFolderOpened: (cb: (p: { root: string; tree: MdNode[] }) => void) => on('folder:opened', cb),
+  onWorkspaceChanged: (cb: (p: { folders: WorkspaceFolder[]; select?: string }) => void) =>
+    on('workspace:changed', cb),
   onFileChanged: (cb: (p: { path: string }) => void) => on('fs:changed', cb),
-  onTreeChanged: (cb: (p: { type: string; path?: string }) => void) => on('fs:tree-changed', cb),
+  onTreeChanged: (cb: (p: { path?: string }) => void) => on('fs:tree-changed', cb),
   onThemeChanged: (cb: (p: { shouldUseDarkColors: boolean }) => void) => on('theme:changed', cb),
   onToggleEdit: (cb: () => void) => on('cmd:toggle-edit', cb),
   onSave: (cb: () => void) => on('cmd:save', cb),

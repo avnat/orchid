@@ -2,8 +2,8 @@
   max-width: var(--reading-width);
   margin: 0 auto;
   /* side padding scales with the pane, so hiding a panel grows the content
-     (not just the margins) while keeping comfortable gutters */
-  padding: 44px clamp(40px, 6%, 120px) 120px;
+     (not just the margins) while keeping a comfortable gutter */
+  padding: 44px clamp(32px, 4%, 88px) 120px;
   font-size: calc(16.5px * var(--font-scale));
   line-height: 1.72;
   color: var(--text);
@@ -57,7 +57,7 @@
 .reading h2 {
   font-size: 1.55em;
   padding-bottom: 0.24em;
-  border-bottom: 1px solid color-mix(in srgb, var(--accent) 28%, var(--line));
+  border-bottom: 1px solid var(--line);
 }
 .reading h3 {
   font-size: 1.26em;
@@ -87,7 +87,7 @@
   margin: 0.3em 0;
 }
 .reading li::marker {
-  color: var(--accent);
+  color: var(--muted);
 }
 
 /* task lists */
@@ -117,14 +117,8 @@
 
 .reading hr {
   border: 0;
-  height: 2px;
-  margin: 2.4em 0;
-  background: linear-gradient(
-    to right,
-    transparent,
-    color-mix(in srgb, var(--accent) 55%, transparent),
-    transparent
-  );
+  border-top: 1px solid var(--line);
+  margin: 2.2em 0;
 }
 
 .reading img {
@@ -138,8 +132,7 @@
 .reading code {
   font-family: var(--mono);
   font-size: 0.86em;
-  background: color-mix(in srgb, var(--accent) 9%, var(--code-bg));
-  color: color-mix(in srgb, var(--accent) 30%, var(--text));
+  background: var(--code-bg);
   padding: 0.12em 0.4em;
   border-radius: 5px;
 }
@@ -176,7 +169,7 @@
   border: 1px solid var(--line);
 }
 .reading th {
-  background: color-mix(in srgb, var(--accent) 10%, var(--surface-2));
+  background: var(--surface-2);
   font-weight: 600;
 }
 
