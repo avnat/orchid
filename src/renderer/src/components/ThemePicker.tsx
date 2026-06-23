@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { useStore } from '../store/useStore'
+import { useStore, type TextSize } from '../store/useStore'
 import { ACCENTS, accentByKey, type Appearance } from '../themes'
 
 const APPEARANCES: { key: Appearance; label: string }[] = [
@@ -8,12 +8,20 @@ const APPEARANCES: { key: Appearance; label: string }[] = [
   { key: 'dark', label: 'Dusk' }
 ]
 
+const TEXT_SIZES: { key: TextSize; label: string }[] = [
+  { key: 'sm', label: 'Small' },
+  { key: 'md', label: 'Medium' },
+  { key: 'lg', label: 'Large' }
+]
+
 export default function ThemePicker(): JSX.Element {
   const appearance = useStore((s) => s.appearance)
   const accentKey = useStore((s) => s.accentKey)
   const systemDark = useStore((s) => s.systemDark)
+  const sidebarTextSize = useStore((s) => s.sidebarTextSize)
   const setAppearance = useStore((s) => s.setAppearance)
   const setAccent = useStore((s) => s.setAccent)
+  const setSidebarTextSize = useStore((s) => s.setSidebarTextSize)
 
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
@@ -78,6 +86,19 @@ export default function ThemePicker(): JSX.Element {
               >
                 <span className="ring" style={{ background: swatch(a) }} />
                 <span className="swatch-name">{a.name}</span>
+              </button>
+            ))}
+          </div>
+
+          <div className="pop-label">Sidebar text size</div>
+          <div className="segment">
+            {TEXT_SIZES.map((t) => (
+              <button
+                key={t.key}
+                className={sidebarTextSize === t.key ? 'seg on' : 'seg'}
+                onClick={() => setSidebarTextSize(t.key)}
+              >
+                {t.label}
               </button>
             ))}
           </div>

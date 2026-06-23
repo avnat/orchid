@@ -7,6 +7,7 @@ import ThemePicker from './components/ThemePicker'
 import CommandPalette from './components/CommandPalette'
 import SearchPanel from './components/SearchPanel'
 import ShortcutsPanel from './components/ShortcutsPanel'
+import FindBar from './components/FindBar'
 import { buildStandaloneHtml } from './markdown/exportDoc'
 import { accentByKey } from './themes'
 
@@ -24,9 +25,12 @@ export default function App(): JSX.Element {
   const accentKey = useStore((s) => s.accentKey)
   const systemDark = useStore((s) => s.systemDark)
   const tocVisible = useStore((s) => s.tocVisible)
+  const sidebarWidth = useStore((s) => s.sidebarWidth)
+  const sidebarTextSize = useStore((s) => s.sidebarTextSize)
   const [paletteOpen, setPaletteOpen] = useState(false)
   const [searchOpen, setSearchOpen] = useState(false)
   const [shortcutsOpen, setShortcutsOpen] = useState(false)
+  const [findOpen, setFindOpen] = useState(false)
 
   // Track the OS appearance.
   useEffect(() => {
@@ -44,6 +48,12 @@ export default function App(): JSX.Element {
     const accent = accentByKey(accentKey)
     root.style.setProperty('--accent', dark ? accent.dark : accent.light)
   }, [dark, accentKey])
+
+  // Configurable sidebar text size (S / M / L).
+  useEffect(() => {
+    const px = sidebarTextSize === 'sm' ? '13px' : sidebarTextSize === 'lg' ? '16.5px' : '14.5px'
+    document.documentElement.style.setProperty('--side-font', px)
+  }, [sidebarTextSize])
 
   // IPC wiring.
   useEffect(() => {
@@ -68,10 +78,33 @@ export default function App(): JSX.Element {
       }),
       window.orchid.onExportHtml(() => void doExport('html')),
       window.orchid.onExportPdf(() => void doExport('pdf')),
-      window.orchid.onShortcuts(() => setShortcutsOpen(true))
+      window.orchid.onShortcuts(() => setShortcutsOpen(true)),
+      // Save-and-close: main asked us to persist before quitting.
+      window.orchid.onSaveAndClose(async () => {
+        await useStore.getState().save()
+        window.orchid.confirmClose()
+      })
     ]
     return () => offs.forEach((off) => off())
   }, [])
+
+  // Keep the main process informed of unsaved-changes state (for the quit prompt).
+  useEffect(() => {
+    let last = false
+    return useStore.subscribe((s) => {
+      const d = s.content !== s.savedContent
+      if (d !== last) {
+        last = d
+        window.orchid.setDirty(d)
+      }
+    })
+  }, [])
+
+  // Close the find bar when the file or mode changes (matches go stale).
+  useEffect(() => {
+    setFindOpen(false)
+    void window.orchid.stopFind()
+  }, [activePath, editMode])
 
   async function doExport(kind: 'html' | 'pdf'): Promise<void> {
     const s = useStore.getState()
@@ -95,6 +128,13 @@ export default function App(): JSX.Element {
       } else if ((e.metaKey || e.ctrlKey) && e.shiftKey && (e.key === 'f' || e.key === 'F')) {
         e.preventDefault()
         if (useStore.getState().folders.length) setSearchOpen(true)
+      } else if ((e.metaKey || e.ctrlKey) && !e.shiftKey && (e.key === 'f' || e.key === 'F')) {
+        // ⌘F = find in the current file (preview only; CodeMirror owns ⌘F in edit mode)
+        const st = useStore.getState()
+        if (st.activePath && !st.editMode) {
+          e.preventDefault()
+          setFindOpen(true)
+        }
       } else if ((e.metaKey || e.ctrlKey) && e.key === '/') {
         e.preventDefault()
         setShortcutsOpen(true)
@@ -147,12 +187,8 @@ export default function App(): JSX.Element {
     <div className="app">
       <div className="titlebar">
         <div className="left">
-          <button
-            className="tbtn"
-            onClick={() => window.orchid.openFolder()}
-            title="Open a folder (⌘O)"
-          >
-            Open Folder
+          <button className="tbtn" onClick={() => window.orchid.open()} title="Open a folder or file (⌘O)">
+            Open
           </button>
         </div>
         <div className="title">{title}</div>
@@ -206,12 +242,16 @@ export default function App(): JSX.Element {
       {!hasWorkspace ? (
         <EmptyState />
       ) : (
-        <div className={`body ${focusMode ? 'focus' : ''}`}>
+        <div
+          className={`body ${focusMode ? 'focus' : ''}`}
+          style={{ gridTemplateColumns: focusMode ? '1fr' : `${sidebarWidth}px 1fr` }}
+        >
           <Sidebar />
           <MainPane />
         </div>
       )}
 
+      <FindBar open={findOpen} onClose={() => setFindOpen(false)} />
       <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} />
       <SearchPanel open={searchOpen} onClose={() => setSearchOpen(false)} />
       <ShortcutsPanel open={shortcutsOpen} onClose={() => setShortcutsOpen(false)} />

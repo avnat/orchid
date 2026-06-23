@@ -24,9 +24,8 @@ function on<T>(channel: string, cb: (payload: T) => void): () => void {
 
 const api = {
   // actions
-  openFolder: (): Promise<void> => ipcRenderer.invoke('dialog:openFolder'),
+  open: (): Promise<void> => ipcRenderer.invoke('dialog:open'),
   addFolder: (): Promise<void> => ipcRenderer.invoke('dialog:addFolder'),
-  openFile: (): Promise<void> => ipcRenderer.invoke('dialog:openFile'),
   openPath: (path: string): Promise<void> => ipcRenderer.invoke('workspace:openPath', path),
   closeFolder: (root: string): Promise<void> => ipcRenderer.invoke('workspace:closeFolder', root),
   refresh: (): Promise<void> => ipcRenderer.invoke('workspace:refresh'),
@@ -46,6 +45,11 @@ const api = {
     ipcRenderer.invoke('export:html', html, defaultName),
   exportPdf: (html: string, defaultName: string): Promise<boolean> =>
     ipcRenderer.invoke('export:pdf', html, defaultName),
+  findInPage: (query: string, opts: { forward?: boolean; findNext?: boolean }): Promise<void> =>
+    ipcRenderer.invoke('find:start', query, opts),
+  stopFind: (): Promise<void> => ipcRenderer.invoke('find:stop'),
+  setDirty: (dirty: boolean): void => ipcRenderer.send('win:dirty', dirty),
+  confirmClose: (): void => ipcRenderer.send('win:ready-to-close'),
 
   // events (return an unsubscribe fn)
   onWorkspaceChanged: (cb: (p: { folders: WorkspaceFolder[]; select?: string }) => void) =>
@@ -60,7 +64,9 @@ const api = {
   onSearch: (cb: () => void) => on('cmd:search', cb),
   onExportHtml: (cb: () => void) => on('cmd:export-html', cb),
   onExportPdf: (cb: () => void) => on('cmd:export-pdf', cb),
-  onShortcuts: (cb: () => void) => on('cmd:shortcuts', cb)
+  onShortcuts: (cb: () => void) => on('cmd:shortcuts', cb),
+  onFindResult: (cb: (p: { active: number; total: number }) => void) => on('find:result', cb),
+  onSaveAndClose: (cb: () => void) => on('app:save-and-close', cb)
 }
 
 export type OrchidApi = typeof api

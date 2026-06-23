@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import type { MdNode, WorkspaceFolder } from '../types'
 import { useStore, type SortMode } from '../store/useStore'
+import Resizer from './Resizer'
 
 function relAge(mtimeMs?: number): { isNew: boolean; label: string | null } {
   if (!mtimeMs) return { isNew: false, label: null }
@@ -163,6 +164,7 @@ export default function Sidebar(): JSX.Element {
   const setFilter = useStore((s) => s.setFilter)
   const sortMode = useStore((s) => s.sortMode)
   const setSortMode = useStore((s) => s.setSortMode)
+  const setSidebarWidth = useStore((s) => s.setSidebarWidth)
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set())
 
   const toggle = (path: string): void =>
@@ -210,6 +212,7 @@ export default function Sidebar(): JSX.Element {
           + Add folder
         </button>
       </div>
+      <Resizer side="right" onResize={(x) => setSidebarWidth(x)} />
     </aside>
   )
 }

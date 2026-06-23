@@ -1,3 +1,12 @@
+/* in-file find (⌘F) highlights — CSS Custom Highlight API */
+::highlight(orchid-find) {
+  background-color: color-mix(in srgb, var(--accent) 28%, transparent);
+}
+::highlight(orchid-find-active) {
+  background-color: var(--accent);
+  color: #fff;
+}
+
 .reading {
   max-width: var(--reading-width);
   margin: 0 auto;

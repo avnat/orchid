@@ -1,5 +1,6 @@
 import { useEffect, useState, type RefObject } from 'react'
 import { useStore } from '../store/useStore'
+import Resizer from './Resizer'
 
 interface Heading {
   id: string
@@ -10,6 +11,8 @@ interface Heading {
 export default function Toc({ scrollerRef }: { scrollerRef: RefObject<HTMLDivElement> }): JSX.Element | null {
   const content = useStore((s) => s.content)
   const activePath = useStore((s) => s.activePath)
+  const tocWidth = useStore((s) => s.tocWidth)
+  const setTocWidth = useStore((s) => s.setTocWidth)
   const [headings, setHeadings] = useState<Heading[]>([])
   const [activeId, setActiveId] = useState<string | null>(null)
 
@@ -59,7 +62,8 @@ export default function Toc({ scrollerRef }: { scrollerRef: RefObject<HTMLDivEle
   }
 
   return (
-    <nav className="toc" aria-label="Table of contents">
+    <nav className="toc" aria-label="Table of contents" style={{ width: tocWidth }}>
+      <Resizer side="left" onResize={(x) => setTocWidth(window.innerWidth - x)} />
       <div className="toc-label">On this page</div>
       <ul>
         {headings.map((h) => (

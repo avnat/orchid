@@ -105,7 +105,8 @@ Press Return, then open Orchid normally. You only ever need this once.
 | Open a single file | `⌃⌘O` |
 | Refresh (re-scan folders) | `⌘R` |
 | Jump to a file | `⌘P` |
-| Find in files | `⌘⇧F` |
+| Find in this file | `⌘F` |
+| Find across all files | `⌘⇧F` |
 | Preview ⇄ Edit | `⌘E` |
 | Save | `⌘S` |
 | Toggle sidebar | `⌘.` |

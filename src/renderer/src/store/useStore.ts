@@ -3,6 +3,7 @@ import type { WorkspaceFolder } from '../types'
 import type { Appearance } from '../themes'
 
 export type SortMode = 'name' | 'recent'
+export type TextSize = 'sm' | 'md' | 'lg'
 
 const lsGet = (k: string, fallback: string): string => {
   try {
@@ -36,10 +37,16 @@ interface OrchidState {
   accentKey: string
   tocVisible: boolean
   sortMode: SortMode
+  sidebarWidth: number
+  tocWidth: number
+  sidebarTextSize: TextSize
   filter: string
 
   setWorkspace: (folders: WorkspaceFolder[], select?: string) => void
   setSortMode: (mode: SortMode) => void
+  setSidebarWidth: (w: number) => void
+  setTocWidth: (w: number) => void
+  setSidebarTextSize: (s: TextSize) => void
   selectFile: (path: string) => Promise<void>
   reloadActive: () => Promise<void>
   setContent: (content: string) => void
@@ -79,6 +86,9 @@ export const useStore = create<OrchidState>((set, get) => ({
   accentKey: lsGet('orchid.accent', 'orchid'),
   tocVisible: lsGet('orchid.toc', 'true') !== 'false',
   sortMode: lsGet('orchid.sort', 'name') as SortMode,
+  sidebarWidth: Math.min(520, Math.max(180, Number(lsGet('orchid.sidebarW', '248')) || 248)),
+  tocWidth: Math.min(420, Math.max(140, Number(lsGet('orchid.tocW', '210')) || 210)),
+  sidebarTextSize: lsGet('orchid.sideText', 'md') as TextSize,
   filter: '',
 
   setWorkspace: (folders, select) =>
@@ -96,8 +106,28 @@ export const useStore = create<OrchidState>((set, get) => ({
     lsSet('orchid.sort', mode)
     set({ sortMode: mode })
   },
+  setSidebarWidth: (w) => {
+    const v = Math.min(520, Math.max(180, Math.round(w)))
+    lsSet('orchid.sidebarW', String(v))
+    set({ sidebarWidth: v })
+  },
+  setTocWidth: (w) => {
+    const v = Math.min(420, Math.max(140, Math.round(w)))
+    lsSet('orchid.tocW', String(v))
+    set({ tocWidth: v })
+  },
+  setSidebarTextSize: (s) => {
+    lsSet('orchid.sideText', s)
+    set({ sidebarTextSize: s })
+  },
 
   selectFile: async (path) => {
+    const s = get()
+    // guard against silently dropping unsaved edits when switching files
+    if (s.activePath && path !== s.activePath && dirty(s)) {
+      const ok = window.confirm('Discard unsaved changes to the current file?')
+      if (!ok) return
+    }
     const text = await window.orchid.readFile(path)
     set({ activePath: path, content: text, savedContent: text, conflict: false })
   },

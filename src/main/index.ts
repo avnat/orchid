@@ -17,6 +17,8 @@ interface WSFolder {
 let mainWindow: BrowserWindow | null = null
 let workspace: WSFolder[] = []
 let currentFiles: string[] = []
+let unsavedChanges = false
+let forceClose = false
 
 function flattenFiles(nodes: MdNode[], out: string[] = []): string[] {
   for (const n of nodes) {
@@ -114,15 +116,19 @@ async function openFolderDialog(add: boolean): Promise<void> {
   await openFolder(result.filePaths[0], add)
 }
 
-async function openFileDialog(): Promise<void> {
+/** One dialog that accepts a folder OR a single markdown file (macOS allows both). */
+async function openDialog(): Promise<void> {
   if (!mainWindow) return
   const result = await dialog.showOpenDialog(mainWindow, {
-    properties: ['openFile'],
+    properties: ['openFile', 'openDirectory'],
     filters: [{ name: 'Markdown', extensions: ['md', 'markdown', 'mdx'] }],
-    message: 'Choose a markdown file to read'
+    message: 'Open a folder or a markdown file'
   })
   if (result.canceled || result.filePaths.length === 0) return
-  await openFile(result.filePaths[0])
+  const p = result.filePaths[0]
+  const stat = await fs.stat(p).catch(() => null)
+  if (stat?.isDirectory()) await openFolder(p, false)
+  else if (stat?.isFile() && MD_RE.test(p)) await openFile(p)
 }
 
 function createWindow(): void {
@@ -174,6 +180,37 @@ function createWindow(): void {
     return { action: 'deny' }
   })
 
+  // Guard against losing unsaved edits when the window/app closes.
+  mainWindow.on('close', (e) => {
+    if (!unsavedChanges || forceClose || !mainWindow) return
+    e.preventDefault()
+    dialog
+      .showMessageBox(mainWindow, {
+        type: 'warning',
+        buttons: ['Save', "Don't Save", 'Cancel'],
+        defaultId: 0,
+        cancelId: 2,
+        message: 'Save changes before closing?',
+        detail: "Your edits to this file will be lost if you don't save them."
+      })
+      .then(({ response }) => {
+        if (response === 0) mainWindow?.webContents.send('app:save-and-close')
+        else if (response === 1) {
+          forceClose = true
+          mainWindow?.close()
+        }
+        // response === 2 (Cancel): stay open
+      })
+  })
+
+  // In-file find (⌘F) — relay native find results to the renderer's find bar.
+  mainWindow.webContents.on('found-in-page', (_e, result) => {
+    mainWindow?.webContents.send('find:result', {
+      active: result.activeMatchOrdinal,
+      total: result.matches
+    })
+  })
+
   if (isDev) {
     mainWindow.webContents.on('console-message', (_e, level, message, line, sourceId) => {
       if (level >= 2) console.log(`[renderer ${level >= 3 ? 'ERROR' : 'WARN'}] ${message} (${sourceId}:${line})`)
@@ -201,9 +238,8 @@ function buildMenu(): void {
     {
       label: 'File',
       submenu: [
-        { label: 'Open Folder…', accelerator: 'CmdOrCtrl+O', click: () => openFolderDialog(false) },
+        { label: 'Open…', accelerator: 'CmdOrCtrl+O', click: () => openDialog() },
         { label: 'Add Folder to Workspace…', accelerator: 'CmdOrCtrl+Shift+O', click: () => openFolderDialog(true) },
-        { label: 'Open File…', accelerator: 'CmdOrCtrl+Ctrl+O', click: () => openFileDialog() },
         { type: 'separator' },
         { label: 'Refresh', accelerator: 'CmdOrCtrl+R', click: () => void refreshAll() },
         { type: 'separator' },
@@ -344,9 +380,8 @@ app.on('window-all-closed', () => {
 })
 
 // ---- IPC ----
-ipcMain.handle('dialog:openFolder', async () => openFolderDialog(false))
+ipcMain.handle('dialog:open', async () => openDialog())
 ipcMain.handle('dialog:addFolder', async () => openFolderDialog(true))
-ipcMain.handle('dialog:openFile', async () => openFileDialog())
 
 ipcMain.handle('workspace:openPath', async (_e, p: string) => {
   const stat = await fs.stat(p).catch(() => null)
@@ -379,6 +414,23 @@ ipcMain.handle('shell:openExternal', async (_e, url: string) => {
 })
 
 ipcMain.handle('theme:get', async () => ({ shouldUseDarkColors: nativeTheme.shouldUseDarkColors }))
+
+// ---- In-file find (⌘F) ----
+ipcMain.handle('find:start', (_e, query: string, opts: { forward?: boolean; findNext?: boolean }) => {
+  if (query) mainWindow?.webContents.findInPage(query, opts)
+})
+ipcMain.handle('find:stop', () => {
+  mainWindow?.webContents.stopFindInPage('clearSelection')
+})
+
+// ---- Unsaved-changes / quit guard ----
+ipcMain.on('win:dirty', (_e, dirty: boolean) => {
+  unsavedChanges = !!dirty
+})
+ipcMain.on('win:ready-to-close', () => {
+  forceClose = true
+  mainWindow?.close()
+})
 
 // ---- Content search across all open folders ----
 ipcMain.handle('fs:search', async (_e, query: string) => {

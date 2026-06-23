@@ -24,9 +24,10 @@ const GROUPS: Group[] = [
     title: 'Navigation',
     items: [
       { keys: ['⌘', 'P'], label: 'Jump to a file' },
-      { keys: ['⇧', '⌘', 'F'], label: 'Find in files' },
+      { keys: ['⌘', 'F'], label: 'Find in this file' },
+      { keys: ['⇧', '⌘', 'F'], label: 'Find across all files' },
       { keys: ['↑', '↓'], label: 'Move through results' },
-      { keys: ['↵'], label: 'Open the selected result' }
+      { keys: ['↵'], label: 'Open / next match' }
     ]
   },
   {

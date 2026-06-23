@@ -214,6 +214,7 @@
 
 /* ---------- Sidebar ---------- */
 .sidebar {
+  position: relative;
   display: flex;
   flex-direction: column;
   background: var(--bg);
@@ -231,7 +232,7 @@
 }
 .side-filter {
   flex: 1 1 100%;
-  font-size: 12.5px;
+  font-size: calc(var(--side-font, 14.5px) - 2px);
   font-family: var(--sans);
   color: var(--text);
   background: var(--surface);
@@ -288,21 +289,30 @@
   padding: 8px;
 }
 .folder-section {
-  margin-bottom: 6px;
+  margin-bottom: 8px;
 }
+/* workspace folders are top-level — make them prominent and high-contrast,
+   clearly above the small muted subfolders inside them */
 .folder-head {
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 6px 6px 5px;
-  font-size: 11px;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--muted);
+  gap: 8px;
+  padding: 10px 6px 8px;
+  font-size: calc(var(--side-font, 14.5px) + 1.5px);
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  text-transform: none;
+  color: var(--text);
   user-select: none;
+}
+/* a divider above every section after the first, so two folders never blur together */
+.folder-section + .folder-section .folder-head {
+  border-top: 1px solid var(--line);
+  margin-top: 4px;
 }
 .folder-head .twist {
   cursor: pointer;
+  color: var(--accent);
   transition: transform 0.15s ease;
 }
 .folder-head.collapsed .twist {
@@ -314,7 +324,6 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-weight: 600;
 }
 .folder-close {
   border: 0;
@@ -357,7 +366,7 @@
   padding: 0;
 }
 .tree .group {
-  font-size: 10.5px;
+  font-size: calc(var(--side-font, 14.5px) - 3.5px);
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--muted);
@@ -382,7 +391,7 @@
   gap: 8px;
   padding: 6px 9px;
   border-radius: 8px;
-  font-size: 13px;
+  font-size: var(--side-font, 14.5px);
   color: var(--text);
   cursor: pointer;
   position: relative;
@@ -435,7 +444,7 @@
 }
 .node .ago {
   margin-left: auto;
-  font-size: 10.5px;
+  font-size: calc(var(--side-font, 14.5px) - 3.5px);
   color: var(--muted);
 }
 
@@ -467,9 +476,10 @@
 
 /* ---------- TOC rail ---------- */
 .toc {
+  position: relative;
   width: 210px;
   flex: none;
-  padding: 48px 20px 40px 8px;
+  padding: 48px 20px 40px 16px;
   overflow-y: auto;
   border-left: 1px solid var(--line);
 }
@@ -579,6 +589,94 @@
 }
 .banner button:hover {
   border-color: var(--accent);
+}
+
+/* ---------- In-file find (⌘F) ---------- */
+.find-bar {
+  position: fixed;
+  top: 52px;
+  right: 24px;
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  box-shadow: var(--shadow);
+  padding: 6px 8px 6px 12px;
+}
+.find-input {
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  font-family: var(--sans);
+  font-size: 13px;
+  width: 180px;
+  outline: none;
+}
+.find-input::placeholder {
+  color: var(--muted);
+}
+.find-count {
+  font-size: 11.5px;
+  color: var(--muted);
+  min-width: 52px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.find-btn {
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+  font-size: 13px;
+}
+.find-btn:hover:not(:disabled) {
+  color: var(--text);
+  background: var(--surface-2);
+}
+.find-btn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+/* ---------- Resize handles ---------- */
+.resizer-x {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 7px;
+  cursor: col-resize;
+  z-index: 5;
+}
+.resizer-x::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: transparent;
+  transition: background 0.15s ease;
+}
+.resizer-x:hover::after,
+.resizer-x.dragging::after {
+  background: var(--accent);
+}
+.resizer-x.right {
+  right: 0;
+}
+.resizer-x.right::after {
+  right: 0;
+}
+.resizer-x.left {
+  left: 0;
+}
+.resizer-x.left::after {
+  left: 0;
 }
 
 /* ---------- Command palette (⌘P) ---------- */

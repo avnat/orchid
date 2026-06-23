@@ -7,7 +7,7 @@ status: draft
 
 A quick tour of how **Orchid** is wired together. The renderer talks to the
 main process through a typed `preload` bridge — see [the data model](./specs/data-model.md)
-for entity details, or the [project README](./README.md).
+for entity details, or the [project README](./README.md). dfdf
 
 ## Goals
 

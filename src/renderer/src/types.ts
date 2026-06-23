@@ -15,9 +15,8 @@ export interface WorkspaceFolder {
 }
 
 export interface OrchidApi {
-  openFolder: () => Promise<void>
+  open: () => Promise<void>
   addFolder: () => Promise<void>
-  openFile: () => Promise<void>
   openPath: (path: string) => Promise<void>
   closeFolder: (root: string) => Promise<void>
   refresh: () => Promise<void>
@@ -30,6 +29,10 @@ export interface OrchidApi {
   search: (query: string) => Promise<SearchHit[]>
   exportHtml: (html: string, defaultName: string) => Promise<boolean>
   exportPdf: (html: string, defaultName: string) => Promise<boolean>
+  findInPage: (query: string, opts: { forward?: boolean; findNext?: boolean }) => Promise<void>
+  stopFind: () => Promise<void>
+  setDirty: (dirty: boolean) => void
+  confirmClose: () => void
   onWorkspaceChanged: (cb: (p: { folders: WorkspaceFolder[]; select?: string }) => void) => () => void
   onFileChanged: (cb: (p: { path: string }) => void) => () => void
   onTreeChanged: (cb: (p: { path?: string }) => void) => () => void
@@ -42,6 +45,8 @@ export interface OrchidApi {
   onExportHtml: (cb: () => void) => () => void
   onExportPdf: (cb: () => void) => () => void
   onShortcuts: (cb: () => void) => () => void
+  onFindResult: (cb: (p: { active: number; total: number }) => void) => () => void
+  onSaveAndClose: (cb: () => void) => () => void
 }
 
 export interface SearchHit {
