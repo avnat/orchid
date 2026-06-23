@@ -1,0 +1,57 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#9b7be4"/>
+      <stop offset="52%" stop-color="#7551c8"/>
+      <stop offset="100%" stop-color="#522f9e"/>
+    </linearGradient>
+    <radialGradient id="sheen" cx="0.5" cy="0.3" r="0.75">
+      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.26"/>
+      <stop offset="60%" stop-color="#ffffff" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="petal" x1="0.1" y1="0" x2="0.9" y2="1">
+      <stop offset="0%" stop-color="#ffffff"/>
+      <stop offset="100%" stop-color="#e4d2fb"/>
+    </linearGradient>
+    <radialGradient id="core" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0%" stop-color="#fff8ff"/>
+      <stop offset="100%" stop-color="#cab2f0"/>
+    </radialGradient>
+    <filter id="shadow" x="-25%" y="-25%" width="150%" height="160%">
+      <feDropShadow dx="0" dy="18" stdDeviation="26" flood-color="#1f1338" flood-opacity="0.34"/>
+    </filter>
+  </defs>
+
+  <!-- inset squircle tile (macOS keyline grid) with a soft drop shadow -->
+  <g filter="url(#shadow)">
+    <rect x="112" y="96" width="800" height="800" rx="180" ry="180" fill="url(#bg)"/>
+    <rect x="112" y="96" width="800" height="800" rx="180" ry="180" fill="url(#sheen)"/>
+  </g>
+
+  <!-- kachnar bloom, centred in the tile -->
+  <g transform="translate(224,188) scale(5.75)">
+    <g fill="url(#petal)" fill-opacity="0.97">
+      <path d="M50,53 C42,46 37,30 43,17 C46,10 54,10 57,17 C63,30 58,46 50,53 Z" transform="rotate(0 50 52)"/>
+      <path d="M50,53 C42,46 37,30 43,17 C46,10 54,10 57,17 C63,30 58,46 50,53 Z" transform="rotate(72 50 52)"/>
+      <path d="M50,53 C42,46 37,30 43,17 C46,10 54,10 57,17 C63,30 58,46 50,53 Z" transform="rotate(144 50 52)"/>
+      <path d="M50,53 C42,46 37,30 43,17 C46,10 54,10 57,17 C63,30 58,46 50,53 Z" transform="rotate(216 50 52)"/>
+      <path d="M50,53 C42,46 37,30 43,17 C46,10 54,10 57,17 C63,30 58,46 50,53 Z" transform="rotate(288 50 52)"/>
+    </g>
+    <g fill="none" stroke="#8a64d6" stroke-width="2.1" stroke-linecap="round" opacity="0.85">
+      <path d="M50,51 C52,40 55,27 53,17" transform="rotate(36 50 52)"/>
+      <path d="M50,51 C52,40 55,27 53,17" transform="rotate(108 50 52)"/>
+      <path d="M50,51 C52,40 55,27 53,17" transform="rotate(180 50 52)"/>
+      <path d="M50,51 C52,40 55,27 53,17" transform="rotate(252 50 52)"/>
+      <path d="M50,51 C52,40 55,27 53,17" transform="rotate(324 50 52)"/>
+    </g>
+    <g fill="#7a55c4">
+      <circle cx="53" cy="16" r="2.2" transform="rotate(36 50 52)"/>
+      <circle cx="53" cy="16" r="2.2" transform="rotate(108 50 52)"/>
+      <circle cx="53" cy="16" r="2.2" transform="rotate(180 50 52)"/>
+      <circle cx="53" cy="16" r="2.2" transform="rotate(252 50 52)"/>
+      <circle cx="53" cy="16" r="2.2" transform="rotate(324 50 52)"/>
+    </g>
+    <circle cx="50" cy="52" r="6" fill="url(#core)"/>
+    <circle cx="50" cy="52" r="2.2" fill="#6a45b2"/>
+  </g>
+</svg>

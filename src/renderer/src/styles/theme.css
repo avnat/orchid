@@ -1,0 +1,62 @@
+:root {
+  /* Bloom (light) — default */
+  --bg: #fbfafd;
+  --surface: #ffffff;
+  --surface-2: #f6f5fa;
+  --text: #1b1a21;
+  --muted: #6e6a78;
+  --line: #eceaf1;
+  --code-bg: #f6f5fa;
+  --sel: #f2effa;
+  --accent: #7c4dd6; /* default Orchid; overridden at runtime */
+  --accent-soft: color-mix(in srgb, var(--accent) 15%, transparent);
+  --danger: #c05e5e;
+  --shadow: 0 18px 50px -24px rgba(40, 30, 80, 0.28);
+
+  --serif: "Iowan Old Style", "Palatino Linotype", Palatino, "Book Antiqua", Georgia, serif;
+  --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  --mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, monospace;
+
+  --reading-width: 72rem;
+  --font-scale: 1;
+}
+
+:root[data-theme="dusk"] {
+  --bg: #141318;
+  --surface: #1c1a22;
+  --surface-2: #211e2a;
+  --text: #e8e5ef;
+  --muted: #928ca0;
+  --line: #29262f;
+  --code-bg: #211e2a;
+  --sel: #262130;
+  --accent: #ab8bf2; /* default Orchid (dark); overridden at runtime */
+  --accent-soft: color-mix(in srgb, var(--accent) 20%, transparent);
+  --danger: #d98a8a;
+  --shadow: 0 18px 50px -24px rgba(0, 0, 0, 0.6);
+}
+
+* {
+  box-sizing: border-box;
+}
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--sans);
+  -webkit-font-smoothing: antialiased;
+  overflow: hidden;
+}
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+::selection {
+  background: var(--accent-soft);
+}

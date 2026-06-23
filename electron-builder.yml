@@ -1,0 +1,19 @@
+appId: com.avnee.orchid
+productName: Orchid
+directories:
+  buildResources: resources
+  output: dist
+files:
+  - out/**/*
+  - resources/**/*
+mac:
+  category: public.app-category.productivity
+  icon: resources/icon.icns
+  target:
+    - target: dmg
+      arch:
+        - arm64
+        - x64
+  artifactName: ${productName}-${version}-${arch}.${ext}
+  # Signing/notarization deferred until distribution is needed.
+  identity: null
