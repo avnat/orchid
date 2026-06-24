@@ -2,6 +2,11 @@
 
 All notable changes to **Orchid**. Newest first. Built for macOS (Apple Silicon).
 
+## 1.1.2 — 2026-06-24
+
+**Fixed**
+- **No more crash when the system theme changes.** If you closed Orchid's window but left the app running, a macOS auto Light↔Dark switch (e.g. at sunset) could throw a "JavaScript error in the main process" dialog. The window reference is now cleared on close, and every background message to the window is guarded against a torn-down window.
+
 ## 1.1.1 — 2026-06-24
 
 **Fixed**

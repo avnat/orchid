@@ -20,6 +20,21 @@ let currentFiles: string[] = []
 let unsavedChanges = false
 let forceClose = false
 
+/** The window is present and not torn down — safe to message or parent a dialog. */
+function windowAlive(): boolean {
+  return !!mainWindow && !mainWindow.isDestroyed() && !mainWindow.webContents.isDestroyed()
+}
+
+/**
+ * Send an IPC message to the renderer only if the window is alive. Background and
+ * async callers (file watcher, theme changes, update checks, menu actions with no
+ * window) can fire after the window is gone — this prevents "Object has been
+ * destroyed" crashes in the main process.
+ */
+function sendToUi(channel: string, payload?: unknown): void {
+  if (windowAlive()) mainWindow!.webContents.send(channel, payload)
+}
+
 function flattenFiles(nodes: MdNode[], out: string[] = []): string[] {
   for (const n of nodes) {
     if (n.type === 'file') out.push(n.path)
@@ -46,7 +61,7 @@ function withinWorkspace(target: string): boolean {
 // ---- Workspace ----
 function emitWorkspace(select?: string): void {
   currentFiles = workspace.flatMap((f) => flattenFiles(f.tree))
-  mainWindow?.webContents.send('workspace:changed', { folders: workspace, select })
+  sendToUi('workspace:changed', { folders: workspace, select })
   rewatch()
 }
 
@@ -163,7 +178,7 @@ async function openDialog(): Promise<void> {
  */
 async function newFileFlow(): Promise<void> {
   if (workspace.length > 0) {
-    mainWindow?.webContents.send('cmd:new-file')
+    sendToUi('cmd:new-file')
     return
   }
   if (!mainWindow) return
@@ -179,13 +194,13 @@ async function newFileFlow(): Promise<void> {
     await fs.writeFile(filePath, '', 'utf8').catch(() => {})
   }
   await openFile(filePath) // selects it via emitWorkspace
-  mainWindow.webContents.send('cmd:new-file-created') // renderer opens it in edit mode
+  sendToUi('cmd:new-file-created') // renderer opens it in edit mode
 }
 
 /** New Folder with nothing open: pick a location, create it, open it as the workspace. */
 async function newFolderFlow(): Promise<void> {
   if (workspace.length > 0) {
-    mainWindow?.webContents.send('cmd:new-folder')
+    sendToUi('cmd:new-folder')
     return
   }
   if (!mainWindow) return
@@ -264,7 +279,7 @@ function createWindow(): void {
         detail: "Your edits to this file will be lost if you don't save them."
       })
       .then(({ response }) => {
-        if (response === 0) mainWindow?.webContents.send('app:save-and-close')
+        if (response === 0) sendToUi('app:save-and-close')
         else if (response === 1) {
           forceClose = true
           mainWindow?.close()
@@ -273,9 +288,15 @@ function createWindow(): void {
       })
   })
 
+  // Clear the reference once the window is gone, so background listeners
+  // (e.g. nativeTheme) don't touch a destroyed window.
+  mainWindow.on('closed', () => {
+    mainWindow = null
+  })
+
   // In-file find (⌘F) — relay native find results to the renderer's find bar.
   mainWindow.webContents.on('found-in-page', (_e, result) => {
-    mainWindow?.webContents.send('find:result', {
+    sendToUi('find:result', {
       active: result.activeMatchOrdinal,
       total: result.matches
     })
@@ -344,8 +365,8 @@ function fetchLatestRelease(): Promise<ReleaseInfo | null> {
 async function checkForUpdates(manual: boolean): Promise<void> {
   const rel = await fetchLatestRelease()
   if (!rel) {
-    if (manual && mainWindow) {
-      await dialog.showMessageBox(mainWindow, {
+    if (manual && windowAlive()) {
+      await dialog.showMessageBox(mainWindow!, {
         type: 'warning',
         buttons: ['OK'],
         message: "Couldn't check for updates",
@@ -355,9 +376,9 @@ async function checkForUpdates(manual: boolean): Promise<void> {
     return
   }
   if (cmpVersions(rel.version, app.getVersion()) > 0) {
-    mainWindow?.webContents.send('update:available', { ...rel, manual })
-  } else if (manual && mainWindow) {
-    await dialog.showMessageBox(mainWindow, {
+    sendToUi('update:available', { ...rel, manual })
+  } else if (manual && windowAlive()) {
+    await dialog.showMessageBox(mainWindow!, {
       type: 'info',
       buttons: ['OK'],
       message: "You're up to date",
@@ -390,23 +411,23 @@ function buildMenu(): void {
         { label: 'Open…', accelerator: 'CmdOrCtrl+O', click: () => openDialog() },
         { label: 'Add Folder to Workspace…', accelerator: 'CmdOrCtrl+Shift+O', click: () => openFolderDialog(true) },
         { type: 'separator' },
-        { label: 'Close File', accelerator: 'CmdOrCtrl+W', click: () => mainWindow?.webContents.send('cmd:close-file') },
+        { label: 'Close File', accelerator: 'CmdOrCtrl+W', click: () => sendToUi('cmd:close-file') },
         { label: 'Refresh', accelerator: 'CmdOrCtrl+R', click: () => void refreshAll() },
         { type: 'separator' },
-        { label: 'Toggle Edit Mode', accelerator: 'CmdOrCtrl+E', click: () => mainWindow?.webContents.send('cmd:toggle-edit') },
-        { label: 'Save', accelerator: 'CmdOrCtrl+S', click: () => mainWindow?.webContents.send('cmd:save') },
+        { label: 'Toggle Edit Mode', accelerator: 'CmdOrCtrl+E', click: () => sendToUi('cmd:toggle-edit') },
+        { label: 'Save', accelerator: 'CmdOrCtrl+S', click: () => sendToUi('cmd:save') },
         { type: 'separator' },
-        { label: 'Find in Files…', accelerator: 'CmdOrCtrl+Shift+F', click: () => mainWindow?.webContents.send('cmd:search') },
+        { label: 'Find in Files…', accelerator: 'CmdOrCtrl+Shift+F', click: () => sendToUi('cmd:search') },
         { type: 'separator' },
-        { label: 'Export as HTML…', click: () => mainWindow?.webContents.send('cmd:export-html') },
-        { label: 'Export as PDF…', click: () => mainWindow?.webContents.send('cmd:export-pdf') }
+        { label: 'Export as HTML…', click: () => sendToUi('cmd:export-html') },
+        { label: 'Export as PDF…', click: () => sendToUi('cmd:export-pdf') }
       ]
     },
     {
       label: 'View',
       submenu: [
-        { label: 'Toggle Sidebar', accelerator: 'CmdOrCtrl+.', click: () => mainWindow?.webContents.send('cmd:focus-mode') },
-        { label: 'Toggle Table of Contents', accelerator: 'CmdOrCtrl+Alt+.', click: () => mainWindow?.webContents.send('cmd:toggle-toc') },
+        { label: 'Toggle Sidebar', accelerator: 'CmdOrCtrl+.', click: () => sendToUi('cmd:focus-mode') },
+        { label: 'Toggle Table of Contents', accelerator: 'CmdOrCtrl+Alt+.', click: () => sendToUi('cmd:toggle-toc') },
         { type: 'separator' },
         { role: 'resetZoom' },
         { role: 'zoomIn' },
@@ -423,8 +444,8 @@ function buildMenu(): void {
     {
       role: 'help',
       submenu: [
-        { label: 'Keyboard Shortcuts', accelerator: 'CmdOrCtrl+/', click: () => mainWindow?.webContents.send('cmd:shortcuts') },
-        { label: 'Contributing & Developer Info', click: () => mainWindow?.webContents.send('cmd:developer') },
+        { label: 'Keyboard Shortcuts', accelerator: 'CmdOrCtrl+/', click: () => sendToUi('cmd:shortcuts') },
+        { label: 'Contributing & Developer Info', click: () => sendToUi('cmd:developer') },
         { type: 'separator' },
         { label: 'View Project on GitHub', click: () => shell.openExternal('https://github.com/avnat/orchid') },
         { type: 'separator' },
@@ -473,6 +494,41 @@ app.whenReady().then(() => {
   // user already dismissed this version). No repeated polling.
   if (!isDev && !process.env['ORCHID_SHOT']) {
     setTimeout(() => void checkForUpdates(false), 3500)
+  }
+
+  // Dev/promo: capture a sequence of frames (for assembling a GIF/video).
+  const framesDir = process.env['ORCHID_FRAMES']
+  if (framesDir) {
+    mainWindow?.webContents.once('did-finish-load', async () => {
+      if (!mainWindow) return
+      const evalJs = process.env['ORCHID_EVAL']
+      if (evalJs) {
+        await new Promise((r) => setTimeout(r, 500))
+        await mainWindow.webContents.executeJavaScript(evalJs).catch(() => {})
+      }
+      await new Promise((r) => setTimeout(r, 700)) // let layout/animation settle
+      const count = Number(process.env['ORCHID_FRAME_COUNT'] || '48')
+      const interval = Number(process.env['ORCHID_FRAME_INTERVAL'] || '125')
+      const spinSel = process.env['ORCHID_SPIN'] // CSS selector to rotate explicitly per frame
+      for (let i = 0; i < count; i++) {
+        if (spinSel) {
+          const deg = (i / count) * 360 // exact even rotation → seamless loop
+          await mainWindow.webContents
+            .executeJavaScript(
+              `(function(){var el=document.querySelector(${JSON.stringify(spinSel)});` +
+                `if(el){el.style.animation='none';el.style.transformOrigin='50% 50%';` +
+                `el.style.transform='rotate(${deg}deg)';}})()`
+            )
+            .catch(() => {})
+          await new Promise((r) => setTimeout(r, 40)) // let it paint
+        }
+        const img = await mainWindow.webContents.capturePage()
+        await fs.writeFile(join(framesDir, `frame-${String(i).padStart(3, '0')}.png`), img.toPNG())
+        if (!spinSel) await new Promise((r) => setTimeout(r, interval))
+      }
+      console.log('ORCHID_FRAMES done:', count)
+      app.quit()
+    })
   }
 
   // Dev convenience: auto-open a folder OR file when ORCHID_OPEN is set.
@@ -539,8 +595,10 @@ app.whenReady().then(() => {
     })
   }
 
+  // Fires on system appearance changes (e.g. macOS auto Light↔Dark at sunset),
+  // even when the window has been closed but the app is still running.
   nativeTheme.on('updated', () => {
-    mainWindow?.webContents.send('theme:changed', { shouldUseDarkColors: nativeTheme.shouldUseDarkColors })
+    sendToUi('theme:changed', { shouldUseDarkColors: nativeTheme.shouldUseDarkColors })
   })
 
   app.on('activate', () => {
@@ -689,7 +747,7 @@ ipcMain.handle('fs:move', async (_e, src: string, destDir: string) => {
 ipcMain.handle('fs:fileMenu', (_e, target: string, opts?: { pinned?: boolean; isFolder?: boolean }) => {
   if (!withinWorkspace(target)) return
   const send = (ch: string): void => {
-    mainWindow?.webContents.send(ch, target)
+    sendToUi(ch, target)
   }
   const menu = Menu.buildFromTemplate([
     { label: 'Rename…', click: () => send('menu:rename') },
