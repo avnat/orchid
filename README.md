@@ -89,8 +89,8 @@ Press Return, then open Orchid normally. You only ever need this once.
 
 Orchid follows your system appearance — **Bloom** (light) and **Dusk** (dark) — or pin either.
 
-<img src="docs/img/hero-dark.png" width="780" alt="The same document in dark mode (Dusk)" />
-<br/><em>Dusk — the same document in dark mode</em>
+<img src="docs/img/hero-dark.png" width="780" alt="A Mermaid diagram rendered in dark mode (Dusk)" />
+<br/><em>Dusk — Mermaid diagrams, math, and code, rendered live</em>
 <br/><br/>
 <img src="docs/img/workspace.png" width="780" alt="Multi-folder workspace with rich preview" />
 <br/><em>Pinned files · multi-folder workspaces · contents rail</em>

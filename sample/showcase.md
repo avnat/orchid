@@ -16,13 +16,18 @@ below is live Markdown: tables, math, diagrams, syntax-highlighted code, and tas
 ## How the stages connect
 
 ```mermaid
-flowchart LR
+flowchart TD
   A[Source] --> B{Cached?}
   B -->|yes| C[Reuse artifact]
   B -->|no| D[Build]
-  D --> E[Test]
-  C --> E
-  E --> F[Deploy]
+  C --> T
+  D --> T
+  subgraph T [Test]
+    direction LR
+    U[Unit] --> I[Integration]
+  end
+  T --> P[Deploy]
+  P --> L((Live))
 ```
 
 ## Stages at a glance
