@@ -19,11 +19,13 @@ export default function ThemePicker(): JSX.Element {
   const accentKey = useStore((s) => s.accentKey)
   const systemDark = useStore((s) => s.systemDark)
   const sidebarTextSize = useStore((s) => s.sidebarTextSize)
+  const tocTextSize = useStore((s) => s.tocTextSize)
   const customAccent = useStore((s) => s.customAccent)
   const setAppearance = useStore((s) => s.setAppearance)
   const setAccent = useStore((s) => s.setAccent)
   const setCustomAccent = useStore((s) => s.setCustomAccent)
   const setSidebarTextSize = useStore((s) => s.setSidebarTextSize)
+  const setTocTextSize = useStore((s) => s.setTocTextSize)
 
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
@@ -121,6 +123,19 @@ export default function ThemePicker(): JSX.Element {
                 key={t.key}
                 className={sidebarTextSize === t.key ? 'seg on' : 'seg'}
                 onClick={() => setSidebarTextSize(t.key)}
+              >
+                {t.label}
+              </button>
+            ))}
+          </div>
+
+          <div className="pop-label">Index text size</div>
+          <div className="segment">
+            {TEXT_SIZES.map((t) => (
+              <button
+                key={t.key}
+                className={tocTextSize === t.key ? 'seg on' : 'seg'}
+                onClick={() => setTocTextSize(t.key)}
               >
                 {t.label}
               </button>

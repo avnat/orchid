@@ -25,7 +25,10 @@ export interface OrchidApi {
   createFolder: (parentDir: string, name: string) => Promise<string>
   trash: (path: string) => Promise<boolean>
   trashMany: (paths: string[]) => Promise<boolean>
-  fileMenu: (path: string) => Promise<void>
+  rename: (path: string, newName: string) => Promise<string>
+  duplicate: (path: string) => Promise<string>
+  move: (src: string, destDir: string) => Promise<string>
+  fileMenu: (path: string, opts?: { pinned?: boolean; isFolder?: boolean }) => Promise<void>
   readFile: (path: string) => Promise<string>
   writeFile: (path: string, content: string) => Promise<boolean>
   reveal: (path: string) => Promise<void>
@@ -52,6 +55,8 @@ export interface OrchidApi {
   onShortcuts: (cb: () => void) => () => void
   onDeveloper: (cb: () => void) => () => void
   onSelectFile: (cb: (path: string) => void) => () => void
+  onBeginRename: (cb: (path: string) => void) => () => void
+  onTogglePin: (cb: (path: string) => void) => () => void
   onFindResult: (cb: (p: { active: number; total: number }) => void) => () => void
   onSaveAndClose: (cb: () => void) => () => void
 }

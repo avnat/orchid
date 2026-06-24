@@ -20,8 +20,31 @@ export default function MainPane(): JSX.Element {
   const systemDark = useStore((s) => s.systemDark)
   const dark = appearance === 'system' ? systemDark : appearance === 'dark'
 
+  const splitRatio = useStore((s) => s.splitRatio)
+  const setSplitRatio = useStore((s) => s.setSplitRatio)
+
   const scrollerRef = useRef<HTMLDivElement>(null)
   const splitPreviewRef = useRef<HTMLDivElement>(null)
+  const splitRef = useRef<HTMLDivElement>(null)
+
+  // Drag the editor↔preview divider (clamped to 25–75% by the store).
+  const startSplitDrag = (e: React.MouseEvent): void => {
+    e.preventDefault()
+    document.body.style.cursor = 'col-resize'
+    document.body.style.userSelect = 'none'
+    const move = (ev: globalThis.MouseEvent): void => {
+      const r = splitRef.current?.getBoundingClientRect()
+      if (r && r.width) setSplitRatio((ev.clientX - r.left) / r.width)
+    }
+    const up = (): void => {
+      document.body.style.cursor = ''
+      document.body.style.userSelect = ''
+      window.removeEventListener('mousemove', move)
+      window.removeEventListener('mouseup', up)
+    }
+    window.addEventListener('mousemove', move)
+    window.addEventListener('mouseup', up)
+  }
 
   // Reset scroll to top when switching files (preview mode).
   useEffect(() => {
@@ -85,12 +108,17 @@ export default function MainPane(): JSX.Element {
     <div className="main">
       {conflict && <ConflictBanner />}
       {editMode ? (
-        <div className="split">
+        <div
+          className="split"
+          ref={splitRef}
+          style={{ gridTemplateColumns: `minmax(0,${splitRatio}fr) 7px minmax(0,${1 - splitRatio}fr)` }}
+        >
           <div className="pane editor-pane">
             <Suspense fallback={<div className="editor-loading" />}>
               <Editor dark={dark} onScrollFraction={syncPreview} />
             </Suspense>
           </div>
+          <div className="split-divider" onMouseDown={startSplitDrag} aria-hidden="true" />
           <div className="pane" ref={splitPreviewRef}>
             <MarkdownView source={content} />
           </div>
@@ -101,6 +129,18 @@ export default function MainPane(): JSX.Element {
             <MarkdownView source={content} />
           </div>
           {tocVisible && <Toc scrollerRef={scrollerRef} />}
+          {!tocVisible && (
+            <div className="reveal-divider right">
+              <button
+                className="divider-btn"
+                title="Show contents"
+                aria-label="Show table of contents"
+                onClick={() => useStore.getState().toggleToc()}
+              >
+                ‹
+              </button>
+            </div>
+          )}
         </div>
       )}
     </div>

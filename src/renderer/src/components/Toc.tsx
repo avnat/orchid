@@ -13,6 +13,7 @@ export default function Toc({ scrollerRef }: { scrollerRef: RefObject<HTMLDivEle
   const activePath = useStore((s) => s.activePath)
   const tocWidth = useStore((s) => s.tocWidth)
   const setTocWidth = useStore((s) => s.setTocWidth)
+  const toggleToc = useStore((s) => s.toggleToc)
   const [headings, setHeadings] = useState<Heading[]>([])
   const [activeId, setActiveId] = useState<string | null>(null)
 
@@ -63,19 +64,26 @@ export default function Toc({ scrollerRef }: { scrollerRef: RefObject<HTMLDivEle
 
   return (
     <nav className="toc" aria-label="Table of contents" style={{ width: tocWidth }}>
-      <Resizer side="left" onResize={(x) => setTocWidth(window.innerWidth - x)} />
-      <div className="toc-label">On this page</div>
-      <ul>
-        {headings.map((h) => (
-          <li
-            key={h.id}
-            className={`toc-item lvl-${h.level} ${activeId === h.id ? 'active' : ''}`}
-            onClick={() => go(h.id)}
-          >
-            {h.text}
-          </li>
-        ))}
-      </ul>
+      <Resizer
+        side="left"
+        onResize={(x) => setTocWidth(window.innerWidth - x)}
+        onCollapse={toggleToc}
+        collapseDir="right"
+      />
+      <div className="toc-scroll">
+        <div className="toc-label">On this page</div>
+        <ul>
+          {headings.map((h) => (
+            <li
+              key={h.id}
+              className={`toc-item lvl-${h.level} ${activeId === h.id ? 'active' : ''}`}
+              onClick={() => go(h.id)}
+            >
+              {h.text}
+            </li>
+          ))}
+        </ul>
+      </div>
     </nav>
   )
 }

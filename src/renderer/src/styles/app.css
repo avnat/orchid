@@ -337,6 +337,7 @@
   display: grid;
   grid-template-columns: 248px 1fr;
   min-height: 0;
+  position: relative;
 }
 .body.focus {
   grid-template-columns: 1fr;
@@ -353,18 +354,120 @@
   background: var(--bg);
   border-right: 1px solid var(--line);
   min-height: 0;
-  overflow: hidden;
+  /* visible (not hidden) so the divider circle can straddle the resize line;
+     the inner scroller clips its own content */
+  overflow: visible;
+  outline: none;
+}
+/* Subtle cue that ↑/↓ navigation is live when the sidebar has focus. */
+.sidebar:focus-visible {
+  box-shadow: inset 2px 0 0 color-mix(in srgb, var(--accent) 55%, transparent);
+}
+/* Bitbucket-style collapse/expand control: a circular chevron that rides the
+   panel divider. On the draggable resizer it appears on hover; on a collapsed
+   panel's bare edge a thin divider keeps it visible. Never overlaps content. */
+.divider-btn {
+  position: absolute;
+  top: 96px; /* clears the sidebar toolbar; sits in the upper area */
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 1px solid color-mix(in srgb, var(--accent) 50%, var(--line));
+  /* opaque fill so the resize line never shows through the circle */
+  background: var(--bg);
+  color: var(--accent);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+  box-shadow: 0 1px 5px rgba(0, 0, 0, 0.18);
+  z-index: 9;
+}
+.divider-btn:hover {
+  color: var(--accent);
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 14%, var(--bg));
+}
+/* Collapse button on the draggable resizer — revealed on hover of the divider. */
+.resizer-x .divider-btn {
+  opacity: 0;
+  transition: opacity 0.12s ease;
+}
+.resizer-x:hover .divider-btn,
+.resizer-x .divider-btn:hover {
+  opacity: 1;
+}
+.resizer-x.right .divider-btn {
+  right: -11px; /* straddle the divider line */
+}
+.resizer-x.left .divider-btn {
+  left: -11px;
+}
+/* When a panel is collapsed, a hoverable edge strip keeps a 1px line; hovering
+   it reveals the expand circle — same behaviour as the resize divider. */
+.reveal-divider {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 8px;
+  z-index: 6;
+  cursor: pointer;
+}
+.reveal-divider::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: var(--line);
+  transition: background 0.15s ease;
+}
+.reveal-divider:hover::after {
+  background: var(--accent);
+}
+.reveal-divider.left {
+  left: 0;
+}
+.reveal-divider.left::after {
+  left: 0;
+}
+.reveal-divider.right {
+  right: 0;
+}
+.reveal-divider.right::after {
+  right: 0;
+}
+.reveal-divider .divider-btn {
+  opacity: 0;
+  transition: opacity 0.12s ease;
+}
+.reveal-divider:hover .divider-btn,
+.reveal-divider .divider-btn:hover {
+  opacity: 1;
+}
+.reveal-divider.left .divider-btn {
+  left: 1px;
+}
+.reveal-divider.right .divider-btn {
+  right: 1px;
 }
 .side-toolbar {
   display: flex;
-  flex-wrap: wrap;
-  align-items: center;
+  flex-direction: column;
   gap: 8px;
   padding: 10px 10px;
   border-bottom: 1px solid var(--line);
 }
+.side-trow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
 .side-filter {
-  flex: 1 1 100%;
+  flex: 1 1 auto;
+  min-width: 0;
   font-size: calc(var(--side-font, 14.5px) - 2px);
   font-family: var(--sans);
   color: var(--text);
@@ -439,6 +542,7 @@
   flex: 1;
   min-height: 0;
   overflow-y: auto;
+  overflow-x: hidden;
   padding: 8px;
 }
 .folder-section {
@@ -804,6 +908,87 @@
   white-space: nowrap;
 }
 
+/* Pin glyph on file rows — hidden until hover, lit when pinned. */
+.pin-btn {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.12s ease, color 0.12s ease, background 0.12s ease;
+}
+.node:hover .pin-btn {
+  opacity: 0.65;
+}
+.pin-btn:hover {
+  opacity: 1;
+  color: var(--accent);
+  background: var(--surface-2);
+}
+.pin-btn.pinned {
+  opacity: 1;
+  color: var(--accent);
+}
+
+/* Pinned quick-access section at the top of the sidebar. */
+.pinned-section {
+  border-bottom: 1px solid var(--line);
+  margin-bottom: 4px;
+  padding-bottom: 6px;
+}
+.pinned-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 9px 4px;
+  font-size: 10.5px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.pinned-head svg {
+  opacity: 0.8;
+}
+.pin-hint {
+  flex: none;
+  margin-left: 6px;
+  padding-left: 6px;
+  font-size: calc(var(--side-font, 14.5px) - 3.5px);
+  color: var(--muted);
+  opacity: 0.8;
+  white-space: nowrap;
+}
+
+/* Inline rename field (tree + single-file row). */
+.rename-input {
+  flex: 1;
+  min-width: 0;
+  font-family: inherit;
+  font-size: var(--side-font, 14.5px);
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--accent);
+  border-radius: 5px;
+  padding: 1px 5px;
+  outline: none;
+}
+
+/* Drag-to-move drop highlight. */
+.group.drop-target,
+.folder-head.drop-target {
+  background: var(--accent-soft);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 50%, transparent);
+  border-radius: 8px;
+}
+
 :root {
   --file-icon: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2016%2016'%3E%3Cpath%20d='M4%201.6h4.7a1%201%200%200%201%20.7.3l2.7%202.7a1%201%200%200%201%20.3.7V13.4a1%201%200%200%201-1%201H4a1%201%200%200%201-1-1V2.6a1%201%200%200%201%201-1Z'/%3E%3C/svg%3E");
 }
@@ -828,6 +1013,7 @@
   flex: 1;
   min-width: 0;
   min-height: 0;
+  position: relative;
 }
 .codeview {
   flex: 1;
@@ -874,9 +1060,19 @@
   position: relative;
   width: 210px;
   flex: none;
-  padding: 48px 20px 40px 16px;
-  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  /* visible so the divider circle can straddle the line; inner scroller clips */
+  overflow: visible;
   border-left: 1px solid var(--line);
+}
+.toc-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 48px 20px 40px 16px;
 }
 .toc-label {
   font-size: 10.5px;
@@ -889,10 +1085,9 @@
   list-style: none;
   margin: 0;
   padding: 0;
-  border-left: 2px solid var(--line);
 }
 .toc-item {
-  font-size: 12.5px;
+  font-size: var(--toc-font, 12.5px);
   line-height: 1.4;
   color: var(--muted);
   padding: 5px 0 5px 12px;
@@ -921,7 +1116,7 @@
 }
 .split {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: minmax(0, 1fr) 7px minmax(0, 1fr);
   min-height: 0;
   flex: 1;
 }
@@ -930,8 +1125,25 @@
   min-width: 0;
   min-height: 0;
 }
-.split .editor-pane {
-  border-right: 1px solid var(--line);
+/* Draggable editor↔preview divider. */
+.split-divider {
+  position: relative;
+  cursor: col-resize;
+  background: transparent;
+}
+.split-divider::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 3px;
+  width: 1px;
+  background: var(--line);
+  transition: background 0.12s ease, width 0.12s ease;
+}
+.split-divider:hover::after {
+  width: 2px;
+  background: var(--accent);
 }
 
 /* Editor (CodeMirror) */

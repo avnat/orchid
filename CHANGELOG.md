@@ -2,6 +2,25 @@
 
 All notable changes to **Orchid**. Newest first. Built for macOS (Apple Silicon).
 
+## 1.0.2 — 2026-06-24
+
+**Added**
+- **Rename, Duplicate & Move** — right-click any file or folder to rename (or double-click its name), duplicate it, or drag it onto another folder to move it.
+- **Copy Path / Copy Relative Path** — right-click to grab a file's full or workspace-relative path.
+- **Pin files** — a **Pinned** section at the top of the sidebar for instant access to your go-to files, no matter where they live. Pin via right-click or the pin glyph that appears on hover.
+- **Keyboard navigation** — with the sidebar focused, ↑/↓ move through files (opening each); **⇧↑ / ⇧↓** and **⇧-click** extend a multi-file selection.
+- **Resizable edit preview** — drag the divider between the editor and the live preview; the split position is remembered.
+- **Adjustable index text size** — Small / Medium / Large for the "On this page" outline (Theme menu).
+
+**Changed**
+- **Collapse panels from the divider** — hover the resize line between panels and a circular control appears to collapse it; hover the edge of a hidden panel to bring it back. (Replaces the two separate title-bar toggles.)
+- **One focus button** in the title bar now hides or restores every panel at once.
+- **Cleaner outline** — dropped the redundant rail line in the table of contents.
+- **Lighter, faster** carried over from 1.0.1.
+
+**Fixed**
+- Your saved **theme and accent now apply instantly on launch** — no more flash of the default purple before your choice loads.
+
 ## 1.0.1 — 2026-06-24
 
 **Added**

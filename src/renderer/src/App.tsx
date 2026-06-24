@@ -23,13 +23,14 @@ export default function App(): JSX.Element {
   const activePath = useStore((s) => s.activePath)
   const editMode = useStore((s) => s.editMode)
   const focusMode = useStore((s) => s.focusMode)
+  const tocVisible = useStore((s) => s.tocVisible)
   const appearance = useStore((s) => s.appearance)
   const accentKey = useStore((s) => s.accentKey)
   const customAccent = useStore((s) => s.customAccent)
   const systemDark = useStore((s) => s.systemDark)
-  const tocVisible = useStore((s) => s.tocVisible)
   const sidebarWidth = useStore((s) => s.sidebarWidth)
   const sidebarTextSize = useStore((s) => s.sidebarTextSize)
+  const tocTextSize = useStore((s) => s.tocTextSize)
   const [paletteOpen, setPaletteOpen] = useState(false)
   const [searchOpen, setSearchOpen] = useState(false)
   const [shortcutsOpen, setShortcutsOpen] = useState(false)
@@ -63,6 +64,12 @@ export default function App(): JSX.Element {
     document.documentElement.style.setProperty('--side-font', px)
   }, [sidebarTextSize])
 
+  // Configurable "On this page" index text size (S / M / L).
+  useEffect(() => {
+    const px = tocTextSize === 'sm' ? '11.5px' : tocTextSize === 'lg' ? '14.5px' : '12.5px'
+    document.documentElement.style.setProperty('--toc-font', px)
+  }, [tocTextSize])
+
   // IPC wiring.
   useEffect(() => {
     const s = useStore.getState
@@ -79,7 +86,7 @@ export default function App(): JSX.Element {
         if (s().activePath) s().toggleEdit()
       }),
       window.orchid.onSave(() => void s().save()),
-      window.orchid.onFocusMode(() => s().toggleFocus()),
+      window.orchid.onFocusMode(() => s().toggleFullscreen()),
       window.orchid.onToggleToc(() => s().toggleToc()),
       window.orchid.onSearch(() => {
         if (s().folders.length) setSearchOpen(true)
@@ -197,6 +204,9 @@ export default function App(): JSX.Element {
     'Orchid'
   )
 
+  const showSidebar = !focusMode
+  const anyPanelShown = !focusMode || tocVisible
+
   return (
     <div className="app">
       <div className={`titlebar ${activePath && editMode ? 'editing' : ''}`}>
@@ -232,22 +242,13 @@ export default function App(): JSX.Element {
             </button>
           </div>
           <button
-            className={`tbtn icon ${focusMode ? 'on' : ''}`}
+            className={`tbtn icon ${anyPanelShown ? '' : 'on'}`}
             disabled={!activePath}
-            onClick={() => useStore.getState().toggleFocus()}
-            title={focusMode ? 'Show sidebar (⌘.)' : 'Hide sidebar for focused reading (⌘.)'}
-            aria-label="Toggle sidebar"
+            onClick={() => useStore.getState().toggleFullscreen()}
+            title={anyPanelShown ? 'Focus mode — hide panels (⌘.)' : 'Exit focus mode (⌘.)'}
+            aria-label="Toggle focus mode"
           >
-            ◧
-          </button>
-          <button
-            className={`tbtn icon ${!tocVisible ? 'on' : ''}`}
-            disabled={!activePath || editMode}
-            onClick={() => useStore.getState().toggleToc()}
-            title={tocVisible ? 'Hide contents (⌘⌥.)' : 'Show contents (⌘⌥.)'}
-            aria-label="Toggle table of contents"
-          >
-            ◨
+            {anyPanelShown ? '⤢' : '⤡'}
           </button>
           <ThemePicker />
           <button
@@ -265,11 +266,23 @@ export default function App(): JSX.Element {
         <EmptyState />
       ) : (
         <div
-          className={`body ${focusMode ? 'focus' : ''}`}
-          style={{ gridTemplateColumns: focusMode ? '1fr' : `${sidebarWidth}px 1fr` }}
+          className={`body ${showSidebar ? '' : 'focus'}`}
+          style={{ gridTemplateColumns: showSidebar ? `${sidebarWidth}px 1fr` : '1fr' }}
         >
-          <Sidebar />
+          {showSidebar && <Sidebar />}
           <MainPane />
+          {focusMode && (
+            <div className="reveal-divider left">
+              <button
+                className="divider-btn"
+                title="Show sidebar"
+                aria-label="Show sidebar"
+                onClick={() => useStore.getState().toggleFocus()}
+              >
+                ›
+              </button>
+            </div>
+          )}
         </div>
       )}
 

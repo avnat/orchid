@@ -1,4 +1,4 @@
-import { app, shell, BrowserWindow, ipcMain, dialog, Menu, nativeTheme, protocol, net, screen } from 'electron'
+import { app, shell, BrowserWindow, ipcMain, dialog, Menu, nativeTheme, protocol, net, screen, clipboard } from 'electron'
 import { join, resolve, relative, sep, basename, dirname } from 'path'
 import { promises as fs } from 'fs'
 import { pathToFileURL } from 'url'
@@ -458,12 +458,77 @@ ipcMain.handle('fs:trashMany', async (_e, paths: string[]) => {
   return true
 })
 
-ipcMain.handle('fs:fileMenu', (_e, target: string) => {
+const exists = (p: string): Promise<boolean> => fs.stat(p).then(() => true).catch(() => false)
+
+/** Path relative to its workspace folder root (prefixed with the folder name when several are open). */
+function relWorkspacePath(target: string): string {
+  const t = resolve(target)
+  const f = workspace.find((w) => {
+    const r = resolve(w.root)
+    return t === r || t.startsWith(r + sep)
+  })
+  if (!f) return basename(target)
+  const rel = relative(resolve(f.root), t)
+  return workspace.length > 1 ? join(f.name, rel) : rel
+}
+
+/** Copy a file or folder beside itself as "name copy" (auto-incrementing). */
+async function duplicatePath(target: string): Promise<string> {
+  const st = await fs.stat(target)
+  const dir = dirname(target)
+  const base = basename(target)
+  const ext = st.isDirectory() ? '' : (base.match(/\.[^.]+$/)?.[0] ?? '')
+  const stem = ext ? base.slice(0, -ext.length) : base
+  let dest = join(dir, `${stem} copy${ext}`)
+  for (let i = 2; await exists(dest); i++) dest = join(dir, `${stem} copy ${i}${ext}`)
+  await fs.cp(target, dest, { recursive: true })
+  return dest
+}
+
+ipcMain.handle('fs:rename', async (_e, target: string, newName: string) => {
+  if (!withinWorkspace(target)) throw new Error('Path outside the workspace')
+  const dest = join(dirname(target), newName.trim())
+  if (!withinWorkspace(dest)) throw new Error('Path outside the workspace')
+  if (resolve(dest) === resolve(target)) return target
+  if (await exists(dest)) throw new Error('An item with that name already exists')
+  await fs.rename(target, dest)
+  return dest
+})
+
+ipcMain.handle('fs:duplicate', async (_e, target: string) => {
+  if (!withinWorkspace(target)) throw new Error('Path outside the workspace')
+  return duplicatePath(target)
+})
+
+ipcMain.handle('fs:move', async (_e, src: string, destDir: string) => {
+  if (!withinWorkspace(src) || !withinWorkspace(destDir)) throw new Error('Path outside the workspace')
+  const s = resolve(src)
+  const d = resolve(destDir)
+  // no-op if already there; refuse to drop a folder into itself or a descendant
+  if (dirname(s) === d) return src
+  if (d === s || d.startsWith(s + sep)) throw new Error("Can't move a folder into itself")
+  const dest = join(destDir, basename(src))
+  if (await exists(dest)) throw new Error('An item with that name already exists there')
+  await fs.rename(src, dest)
+  return dest
+})
+
+ipcMain.handle('fs:fileMenu', (_e, target: string, opts?: { pinned?: boolean; isFolder?: boolean }) => {
   if (!withinWorkspace(target)) return
+  const send = (ch: string): void => {
+    mainWindow?.webContents.send(ch, target)
+  }
   const menu = Menu.buildFromTemplate([
-    { label: 'Select (for multi-delete)', click: () => mainWindow?.webContents.send('file:select', target) },
-    { label: 'Reveal in Finder', click: () => shell.showItemInFolder(target) },
+    { label: 'Rename…', click: () => send('menu:rename') },
+    { label: 'Duplicate', click: () => duplicatePath(target).catch(() => {}) },
     { type: 'separator' },
+    { label: 'Copy Path', click: () => clipboard.writeText(target) },
+    { label: 'Copy Relative Path', click: () => clipboard.writeText(relWorkspacePath(target)) },
+    { type: 'separator' },
+    { label: opts?.pinned ? 'Unpin' : 'Pin', click: () => send('menu:pin-toggle') },
+    { label: 'Select (for multi-delete)', click: () => send('file:select') },
+    { type: 'separator' },
+    { label: 'Reveal in Finder', click: () => shell.showItemInFolder(target) },
     {
       label: 'Move to Trash',
       click: async () => {

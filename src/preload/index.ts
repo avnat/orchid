@@ -34,7 +34,11 @@ const api = {
     ipcRenderer.invoke('fs:createFolder', parentDir, name),
   trash: (path: string): Promise<boolean> => ipcRenderer.invoke('fs:trash', path),
   trashMany: (paths: string[]): Promise<boolean> => ipcRenderer.invoke('fs:trashMany', paths),
-  fileMenu: (path: string): Promise<void> => ipcRenderer.invoke('fs:fileMenu', path),
+  rename: (path: string, newName: string): Promise<string> => ipcRenderer.invoke('fs:rename', path, newName),
+  duplicate: (path: string): Promise<string> => ipcRenderer.invoke('fs:duplicate', path),
+  move: (src: string, destDir: string): Promise<string> => ipcRenderer.invoke('fs:move', src, destDir),
+  fileMenu: (path: string, opts?: { pinned?: boolean; isFolder?: boolean }): Promise<void> =>
+    ipcRenderer.invoke('fs:fileMenu', path, opts),
   rescan: (changedPath: string): Promise<void> => ipcRenderer.invoke('workspace:rescan', changedPath),
   readFile: (path: string): Promise<string> => ipcRenderer.invoke('fs:read', path),
   writeFile: (path: string, content: string): Promise<boolean> =>
@@ -73,6 +77,8 @@ const api = {
   onShortcuts: (cb: () => void) => on('cmd:shortcuts', cb),
   onDeveloper: (cb: () => void) => on('cmd:developer', cb),
   onSelectFile: (cb: (path: string) => void) => on('file:select', cb),
+  onBeginRename: (cb: (path: string) => void) => on('menu:rename', cb),
+  onTogglePin: (cb: (path: string) => void) => on('menu:pin-toggle', cb),
   onFindResult: (cb: (p: { active: number; total: number }) => void) => on('find:result', cb),
   onSaveAndClose: (cb: () => void) => on('app:save-and-close', cb)
 }
