@@ -121,14 +121,20 @@ async function openDialog(): Promise<void> {
   if (!mainWindow) return
   const result = await dialog.showOpenDialog(mainWindow, {
     properties: ['openFile', 'openDirectory'],
-    filters: [{ name: 'Text & code', extensions: TEXT_EXTENSIONS.map((e) => e.slice(1)) }],
+    // "All files" is the default so nothing is wrongly greyed out — macOS can
+    // resolve some .md files to a non-markdown UTI, which an extension filter
+    // would block. "Markdown & text" stays available as a narrowing option.
+    filters: [
+      { name: 'All files', extensions: ['*'] },
+      { name: 'Markdown & text', extensions: TEXT_EXTENSIONS.map((e) => e.slice(1)) }
+    ],
     message: 'Open a folder or a file'
   })
   if (result.canceled || result.filePaths.length === 0) return
   const p = result.filePaths[0]
   const stat = await fs.stat(p).catch(() => null)
   if (stat?.isDirectory()) await openFolder(p, false)
-  else if (stat?.isFile() && TEXT_RE.test(p)) await openFile(p)
+  else if (stat?.isFile()) await openFile(p) // read-time guardrail handles binary/unsupported
 }
 
 function createWindow(): void {
@@ -221,12 +227,88 @@ function createWindow(): void {
   }
 }
 
+// ---- Update check (GitHub Releases) ----
+const UPDATE_REPO = 'avnat/orchid'
+
+/** Compare semver-ish tags; >0 when a is newer than b. */
+function cmpVersions(a: string, b: string): number {
+  const pa = a.replace(/^v/, '').split('.').map((n) => parseInt(n, 10) || 0)
+  const pb = b.replace(/^v/, '').split('.').map((n) => parseInt(n, 10) || 0)
+  for (let i = 0; i < 3; i++) {
+    if ((pa[i] || 0) !== (pb[i] || 0)) return (pa[i] || 0) - (pb[i] || 0)
+  }
+  return 0
+}
+
+interface ReleaseInfo {
+  version: string
+  notes: string
+  url: string
+  download: string
+}
+
+function fetchLatestRelease(): Promise<ReleaseInfo | null> {
+  return new Promise((resolve) => {
+    const req = net.request(`https://api.github.com/repos/${UPDATE_REPO}/releases/latest`)
+    req.setHeader('User-Agent', 'Orchid-Updater')
+    req.setHeader('Accept', 'application/vnd.github+json')
+    let data = ''
+    req.on('response', (res) => {
+      res.on('data', (c) => (data += c.toString()))
+      res.on('end', () => {
+        try {
+          const j = JSON.parse(data)
+          if (!j.tag_name) return resolve(null)
+          const dmg = (j.assets || []).find((a: { name: string }) => a.name.endsWith('.dmg'))
+          resolve({
+            version: j.tag_name,
+            notes: typeof j.body === 'string' ? j.body : '',
+            url: j.html_url,
+            download: dmg?.browser_download_url || j.html_url
+          })
+        } catch {
+          resolve(null)
+        }
+      })
+    })
+    req.on('error', () => resolve(null))
+    req.end()
+  })
+}
+
+/** Check GitHub for a newer release. `manual` shows an "up to date" / error dialog too. */
+async function checkForUpdates(manual: boolean): Promise<void> {
+  const rel = await fetchLatestRelease()
+  if (!rel) {
+    if (manual && mainWindow) {
+      await dialog.showMessageBox(mainWindow, {
+        type: 'warning',
+        buttons: ['OK'],
+        message: "Couldn't check for updates",
+        detail: 'Please check your connection and try again.'
+      })
+    }
+    return
+  }
+  if (cmpVersions(rel.version, app.getVersion()) > 0) {
+    mainWindow?.webContents.send('update:available', { ...rel, manual })
+  } else if (manual && mainWindow) {
+    await dialog.showMessageBox(mainWindow, {
+      type: 'info',
+      buttons: ['OK'],
+      message: "You're up to date",
+      detail: `Orchid ${app.getVersion()} is the latest version.`
+    })
+  }
+}
+
 function buildMenu(): void {
   const template: Electron.MenuItemConstructorOptions[] = [
     {
       label: app.name,
       submenu: [
         { role: 'about' },
+        { label: 'Check for Updates…', click: () => void checkForUpdates(true) },
         { type: 'separator' },
         { role: 'hide' },
         { role: 'hideOthers' },
@@ -238,6 +320,9 @@ function buildMenu(): void {
     {
       label: 'File',
       submenu: [
+        { label: 'New File…', accelerator: 'CmdOrCtrl+N', click: () => mainWindow?.webContents.send('cmd:new-file') },
+        { label: 'New Folder…', accelerator: 'CmdOrCtrl+Shift+N', click: () => mainWindow?.webContents.send('cmd:new-folder') },
+        { type: 'separator' },
         { label: 'Open…', accelerator: 'CmdOrCtrl+O', click: () => openDialog() },
         { label: 'Add Folder to Workspace…', accelerator: 'CmdOrCtrl+Shift+O', click: () => openFolderDialog(true) },
         { type: 'separator' },
@@ -273,7 +358,19 @@ function buildMenu(): void {
         { label: 'Keyboard Shortcuts', accelerator: 'CmdOrCtrl+/', click: () => mainWindow?.webContents.send('cmd:shortcuts') },
         { label: 'Contributing & Developer Info', click: () => mainWindow?.webContents.send('cmd:developer') },
         { type: 'separator' },
-        { label: 'View Project on GitHub', click: () => shell.openExternal('https://github.com/avnat/orchid') }
+        { label: 'View Project on GitHub', click: () => shell.openExternal('https://github.com/avnat/orchid') },
+        { type: 'separator' },
+        {
+          label: 'Give Orchid a Shout-out on X',
+          click: () =>
+            shell.openExternal(
+              'https://twitter.com/intent/tweet?text=' +
+                encodeURIComponent(
+                  "I've been reading my Markdown in Orchid — a clean, native macOS reader by @AvneeNathani 🌸 https://github.com/avnat/orchid"
+                )
+            )
+        },
+        { label: 'Follow @AvneeNathani on X', click: () => shell.openExternal('https://twitter.com/AvneeNathani') }
       ]
     }
   ]
@@ -303,6 +400,12 @@ app.whenReady().then(() => {
 
   buildMenu()
   createWindow()
+
+  // One quiet update check shortly after launch (the renderer ignores it if the
+  // user already dismissed this version). No repeated polling.
+  if (!isDev && !process.env['ORCHID_SHOT']) {
+    setTimeout(() => void checkForUpdates(false), 3500)
+  }
 
   // Dev convenience: auto-open a folder OR file when ORCHID_OPEN is set.
   const autoOpen = process.env['ORCHID_OPEN']
@@ -552,6 +655,8 @@ ipcMain.handle('shell:openExternal', async (_e, url: string) => {
   shell.openExternal(url)
 })
 
+ipcMain.handle('update:check', async () => checkForUpdates(true))
+
 ipcMain.handle('theme:get', async () => ({ shouldUseDarkColors: nativeTheme.shouldUseDarkColors }))
 
 // ---- In-file find (⌘F) ----
@@ -626,24 +731,51 @@ ipcMain.handle('export:html', async (_e, html: string, defaultName: string) => {
   return true
 })
 
-ipcMain.handle('export:pdf', async (_e, html: string, defaultName: string) => {
-  const out = await chooseSavePath(defaultName, 'pdf')
-  if (!out) return false
-  const tmp = join(app.getPath('temp'), `orchid-export-${Date.now()}.html`)
-  await fs.writeFile(tmp, html, 'utf8')
-  const win = new BrowserWindow({ show: false, webPreferences: { sandbox: true } })
-  try {
-    await win.loadFile(tmp)
-    await new Promise((r) => setTimeout(r, 300))
-    const pdf = await win.webContents.printToPDF({
-      printBackground: true,
-      margins: { top: 0.6, bottom: 0.6, left: 0.6, right: 0.6 }
-    })
-    await fs.writeFile(out, pdf)
-    shell.showItemInFolder(out)
-  } finally {
-    win.destroy()
-    fs.unlink(tmp).catch(() => {})
+ipcMain.handle(
+  'export:pdf',
+  async (
+    _e,
+    html: string,
+    defaultName: string,
+    opts?: { header?: string; footer?: string; pageNumbers?: boolean }
+  ) => {
+    const out = await chooseSavePath(defaultName, 'pdf')
+    if (!out) return false
+    const tmp = join(app.getPath('temp'), `orchid-export-${Date.now()}.html`)
+    await fs.writeFile(tmp, html, 'utf8')
+    const win = new BrowserWindow({ show: false, webPreferences: { sandbox: true } })
+
+    const header = (opts?.header ?? '').trim()
+    const footer = (opts?.footer ?? '').trim()
+    const pageNumbers = !!opts?.pageNumbers
+    const hasHeader = !!header
+    const hasFooter = !!(footer || pageNumbers)
+    const esc = (s: string): string =>
+      s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    const headerTemplate = `<div style="font-size:9px;width:100%;text-align:center;color:#9a9a9a;padding:0 0.5in;">${esc(header)}</div>`
+    const footerTemplate = `<div style="font-size:9px;width:100%;color:#9a9a9a;padding:0 0.5in;display:flex;justify-content:space-between;"><span>${esc(footer)}</span><span>${pageNumbers ? 'Page <span class="pageNumber"></span> of <span class="totalPages"></span>' : ''}</span></div>`
+
+    try {
+      await win.loadFile(tmp)
+      await new Promise((r) => setTimeout(r, 300))
+      const pdf = await win.webContents.printToPDF({
+        printBackground: true,
+        displayHeaderFooter: hasHeader || hasFooter,
+        headerTemplate,
+        footerTemplate,
+        margins: {
+          top: hasHeader ? 0.85 : 0.6,
+          bottom: hasFooter ? 0.85 : 0.6,
+          left: 0.6,
+          right: 0.6
+        }
+      })
+      await fs.writeFile(out, pdf)
+      shell.showItemInFolder(out)
+    } finally {
+      win.destroy()
+      fs.unlink(tmp).catch(() => {})
+    }
+    return true
   }
-  return true
-})
+)

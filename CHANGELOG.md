@@ -2,6 +2,22 @@
 
 All notable changes to **Orchid**. Newest first. Built for macOS (Apple Silicon).
 
+## 1.1.0 — 2026-06-24
+
+**Added**
+- **In-app updates** — **Check for Updates…** in the Orchid menu, plus a quiet one-time check on launch. When a newer release exists, an in-app card shows what's new with a one-click download. (No background nagging.)
+- **Customisable PDF export** — set a **header**, **footer**, and toggle **page numbers** before exporting; use `{title}` and `{date}` tokens. Your choices are remembered.
+- **New File (⌘N)** and **New Folder (⌘⇧N)** in the File menu — creation is no longer sidebar-only.
+- **Shout-outs** — Help → *Give Orchid a Shout-out on X* (a pre-filled post) and *Follow @AvneeNathani*; a friendly link on the launch screen too.
+
+**Changed**
+- **Redesigned sort control** — the `Name / Recent` pill is now a compact **"Sort by" dropdown** with a checkmarked menu (room to grow).
+- **Edit mode focuses the editor** with the cursor at the very start, so you can type immediately.
+- **Exports are always light** — PDF and HTML now render on a clean white page (keeping your accent) regardless of the app theme, so they print and share well.
+
+**Fixed**
+- **Some `.md` files couldn't be opened** — the Open dialog no longer greys out valid Markdown files (a macOS file-type quirk). It defaults to *All files*, and any file you pick opens, with the binary guardrail handling anything unsupported.
+
 ## 1.0.2 — 2026-06-24
 
 **Added**

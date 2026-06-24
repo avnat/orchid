@@ -45,6 +45,7 @@ const api = {
     ipcRenderer.invoke('fs:write', path, content),
   reveal: (path: string): Promise<void> => ipcRenderer.invoke('fs:reveal', path),
   openExternal: (url: string): Promise<void> => ipcRenderer.invoke('shell:openExternal', url),
+  checkUpdates: (): Promise<void> => ipcRenderer.invoke('update:check'),
   getTheme: (): Promise<{ shouldUseDarkColors: boolean }> => ipcRenderer.invoke('theme:get'),
   search: (
     query: string
@@ -53,8 +54,11 @@ const api = {
   > => ipcRenderer.invoke('fs:search', query),
   exportHtml: (html: string, defaultName: string): Promise<boolean> =>
     ipcRenderer.invoke('export:html', html, defaultName),
-  exportPdf: (html: string, defaultName: string): Promise<boolean> =>
-    ipcRenderer.invoke('export:pdf', html, defaultName),
+  exportPdf: (
+    html: string,
+    defaultName: string,
+    opts?: { header: string; footer: string; pageNumbers: boolean }
+  ): Promise<boolean> => ipcRenderer.invoke('export:pdf', html, defaultName, opts),
   findInPage: (query: string, opts: { forward?: boolean; findNext?: boolean }): Promise<void> =>
     ipcRenderer.invoke('find:start', query, opts),
   stopFind: (): Promise<void> => ipcRenderer.invoke('find:stop'),
@@ -72,6 +76,8 @@ const api = {
   onFocusMode: (cb: () => void) => on('cmd:focus-mode', cb),
   onToggleToc: (cb: () => void) => on('cmd:toggle-toc', cb),
   onSearch: (cb: () => void) => on('cmd:search', cb),
+  onNewFile: (cb: () => void) => on('cmd:new-file', cb),
+  onNewFolder: (cb: () => void) => on('cmd:new-folder', cb),
   onExportHtml: (cb: () => void) => on('cmd:export-html', cb),
   onExportPdf: (cb: () => void) => on('cmd:export-pdf', cb),
   onShortcuts: (cb: () => void) => on('cmd:shortcuts', cb),
@@ -80,7 +86,10 @@ const api = {
   onBeginRename: (cb: (path: string) => void) => on('menu:rename', cb),
   onTogglePin: (cb: (path: string) => void) => on('menu:pin-toggle', cb),
   onFindResult: (cb: (p: { active: number; total: number }) => void) => on('find:result', cb),
-  onSaveAndClose: (cb: () => void) => on('app:save-and-close', cb)
+  onSaveAndClose: (cb: () => void) => on('app:save-and-close', cb),
+  onUpdateAvailable: (
+    cb: (info: { version: string; notes: string; url: string; download: string; manual: boolean }) => void
+  ) => on('update:available', cb)
 }
 
 export type OrchidApi = typeof api

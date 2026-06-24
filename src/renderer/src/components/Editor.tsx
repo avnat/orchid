@@ -82,11 +82,17 @@ export default function Editor({
       theme={theme}
       extensions={extensions}
       editable={!readOnly}
+      autoFocus={!readOnly}
       basicSetup={{ lineNumbers: showLineNumbers, foldGutter: false, highlightActiveLine: false }}
       onChange={(v) => {
         if (!readOnly) setContent(v)
       }}
       onCreateEditor={(view) => {
+        // Land the cursor at the very start (0,0) and focus, so editing begins immediately.
+        if (!readOnly) {
+          view.dispatch({ selection: { anchor: 0, head: 0 } })
+          view.focus()
+        }
         view.scrollDOM.addEventListener('scroll', () => {
           const el = view.scrollDOM
           const frac = el.scrollTop / Math.max(1, el.scrollHeight - el.clientHeight)

@@ -16,7 +16,19 @@ export default function EmptyState(): JSX.Element {
         or drop a folder or file anywhere · <kbd>⌘O</kbd>
       </p>
 
-      <div className="byline">Concept by Avnee · Built by Claude</div>
+      <div className="byline">
+        Concept by Avnee · Built by Claude · enjoying it?{' '}
+        <a
+          href="#"
+          className="byline-link"
+          onClick={(e) => {
+            e.preventDefault()
+            window.orchid.openExternal('https://twitter.com/AvneeNathani')
+          }}
+        >
+          say hi @AvneeNathani
+        </a>
+      </div>
     </div>
   )
 }

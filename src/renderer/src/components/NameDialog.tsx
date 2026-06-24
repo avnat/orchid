@@ -3,24 +3,26 @@ import { useEffect, useRef, useState } from 'react'
 /** Modal to create a new file or folder (toggle inside). */
 export default function NameDialog({
   open,
+  initialMode = 'file',
   onSubmit,
   onClose
 }: {
   open: boolean
+  initialMode?: 'file' | 'folder'
   onSubmit: (name: string, mode: 'file' | 'folder') => void
   onClose: () => void
 }): JSX.Element | null {
   const [name, setName] = useState('')
-  const [mode, setMode] = useState<'file' | 'folder'>('file')
+  const [mode, setMode] = useState<'file' | 'folder'>(initialMode)
   const inputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     if (open) {
       setName('')
-      setMode('file')
+      setMode(initialMode)
       requestAnimationFrame(() => inputRef.current?.focus())
     }
-  }, [open])
+  }, [open, initialMode])
 
   if (!open) return null
 

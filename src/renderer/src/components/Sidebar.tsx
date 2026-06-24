@@ -3,6 +3,7 @@ import type { MdNode, WorkspaceFolder } from '../types'
 import { useStore, type SortMode } from '../store/useStore'
 import Resizer from './Resizer'
 import NameDialog from './NameDialog'
+import SortMenu from './SortMenu'
 
 const DRAG_TYPE = 'application/orchid-path'
 
@@ -585,7 +586,6 @@ export default function Sidebar(): JSX.Element {
   const filter = useStore((s) => s.filter)
   const setFilter = useStore((s) => s.setFilter)
   const sortMode = useStore((s) => s.sortMode)
-  const setSortMode = useStore((s) => s.setSortMode)
   const setSidebarWidth = useStore((s) => s.setSidebarWidth)
   const selectFile = useStore((s) => s.selectFile)
   const activePath = useStore((s) => s.activePath)
@@ -600,6 +600,7 @@ export default function Sidebar(): JSX.Element {
   const toggleFocus = useStore((s) => s.toggleFocus)
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set())
   const [dialogDir, setDialogDir] = useState<string | null>(null)
+  const [dialogMode, setDialogMode] = useState<'file' | 'folder'>('file')
   const [dropTarget, setDropTarget] = useState<string | null>(null)
   const [cursor, setCursor] = useState<string | null>(null)
   const anchorRef = useRef<string | null>(null)
@@ -681,6 +682,22 @@ export default function Sidebar(): JSX.Element {
     }
   }, [setRenaming, togglePin])
 
+  // New File / New Folder from the File menu — open the create dialog at the first folder.
+  useEffect(() => {
+    const openCreate = (mode: 'file' | 'folder') => (): void => {
+      const root = useStore.getState().folders[0]?.root
+      if (!root) return
+      setDialogMode(mode)
+      setDialogDir(root)
+    }
+    const offFile = window.orchid.onNewFile(openCreate('file'))
+    const offFolder = window.orchid.onNewFolder(openCreate('folder'))
+    return () => {
+      offFile()
+      offFolder()
+    }
+  }, [])
+
   const toggle = (path: string): void =>
     setCollapsed((prev) => {
       const next = new Set(prev)
@@ -688,7 +705,10 @@ export default function Sidebar(): JSX.Element {
       return next
     })
 
-  const onNew = (dir: string): void => setDialogDir(dir)
+  const onNew = (dir: string): void => {
+    setDialogMode('file')
+    setDialogDir(dir)
+  }
 
   // From the pinned list: open the file and expand its ancestor folders so it's visible.
   const navigateTo = (path: string): void => {
@@ -729,14 +749,7 @@ export default function Sidebar(): JSX.Element {
           onChange={(e) => setFilter(e.target.value)}
         />
         <div className="side-trow">
-          <div className="sort-toggle" title="Sort order">
-            <button className={sortMode === 'name' ? 'on' : ''} onClick={() => setSortMode('name')}>
-              Name
-            </button>
-            <button className={sortMode === 'recent' ? 'on' : ''} onClick={() => setSortMode('recent')}>
-              Recent
-            </button>
-          </div>
+          <SortMenu />
           <button
             className="side-refresh"
             title="New file or folder"
@@ -806,7 +819,12 @@ export default function Sidebar(): JSX.Element {
         </button>
       </div>
 
-      <NameDialog open={!!dialogDir} onSubmit={handleCreate} onClose={() => setDialogDir(null)} />
+      <NameDialog
+        open={!!dialogDir}
+        initialMode={dialogMode}
+        onSubmit={handleCreate}
+        onClose={() => setDialogDir(null)}
+      />
 
       <Resizer side="right" onResize={(x) => setSidebarWidth(x)} onCollapse={() => toggleFocus()} collapseDir="left" />
     </aside>

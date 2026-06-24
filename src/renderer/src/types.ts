@@ -33,10 +33,15 @@ export interface OrchidApi {
   writeFile: (path: string, content: string) => Promise<boolean>
   reveal: (path: string) => Promise<void>
   openExternal: (url: string) => Promise<void>
+  checkUpdates: () => Promise<void>
   getTheme: () => Promise<{ shouldUseDarkColors: boolean }>
   search: (query: string) => Promise<SearchHit[]>
   exportHtml: (html: string, defaultName: string) => Promise<boolean>
-  exportPdf: (html: string, defaultName: string) => Promise<boolean>
+  exportPdf: (
+    html: string,
+    defaultName: string,
+    opts?: { header: string; footer: string; pageNumbers: boolean }
+  ) => Promise<boolean>
   findInPage: (query: string, opts: { forward?: boolean; findNext?: boolean }) => Promise<void>
   stopFind: () => Promise<void>
   setDirty: (dirty: boolean) => void
@@ -50,6 +55,8 @@ export interface OrchidApi {
   onFocusMode: (cb: () => void) => () => void
   onToggleToc: (cb: () => void) => () => void
   onSearch: (cb: () => void) => () => void
+  onNewFile: (cb: () => void) => () => void
+  onNewFolder: (cb: () => void) => () => void
   onExportHtml: (cb: () => void) => () => void
   onExportPdf: (cb: () => void) => () => void
   onShortcuts: (cb: () => void) => () => void
@@ -59,6 +66,9 @@ export interface OrchidApi {
   onTogglePin: (cb: (path: string) => void) => () => void
   onFindResult: (cb: (p: { active: number; total: number }) => void) => () => void
   onSaveAndClose: (cb: () => void) => () => void
+  onUpdateAvailable: (
+    cb: (info: { version: string; notes: string; url: string; download: string; manual: boolean }) => void
+  ) => () => void
 }
 
 export interface SearchHit {

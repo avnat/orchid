@@ -8,6 +8,8 @@ import CommandPalette from './components/CommandPalette'
 import SearchPanel from './components/SearchPanel'
 import ShortcutsPanel from './components/ShortcutsPanel'
 import DeveloperPanel from './components/DeveloperPanel'
+import UpdateDialog, { type UpdateInfo } from './components/UpdateDialog'
+import PdfDialog, { type PdfOptions } from './components/PdfDialog'
 import FindBar from './components/FindBar'
 import { buildStandaloneHtml } from './markdown/exportDoc'
 import { isMarkdownFile } from './markdown/langs'
@@ -36,6 +38,8 @@ export default function App(): JSX.Element {
   const [shortcutsOpen, setShortcutsOpen] = useState(false)
   const [developerOpen, setDeveloperOpen] = useState(false)
   const [findOpen, setFindOpen] = useState(false)
+  const [update, setUpdate] = useState<UpdateInfo | null>(null)
+  const [pdfOpen, setPdfOpen] = useState(false)
 
   // Track the OS appearance.
   useEffect(() => {
@@ -70,6 +74,16 @@ export default function App(): JSX.Element {
     document.documentElement.style.setProperty('--toc-font', px)
   }, [tocTextSize])
 
+  // Update notifications: always show on a manual check; on the quiet launch
+  // check, skip versions the user already dismissed.
+  useEffect(() => {
+    return window.orchid.onUpdateAvailable((info) => {
+      if (info.manual || localStorage.getItem('orchid.updateDismissed') !== info.version) {
+        setUpdate(info)
+      }
+    })
+  }, [])
+
   // IPC wiring.
   useEffect(() => {
     const s = useStore.getState
@@ -92,7 +106,7 @@ export default function App(): JSX.Element {
         if (s().folders.length) setSearchOpen(true)
       }),
       window.orchid.onExportHtml(() => void doExport('html')),
-      window.orchid.onExportPdf(() => void doExport('pdf')),
+      window.orchid.onExportPdf(() => setPdfOpen(true)),
       window.orchid.onShortcuts(() => setShortcutsOpen(true)),
       window.orchid.onDeveloper(() => setDeveloperOpen(true)),
       window.orchid.onSelectFile((path) => {
@@ -135,6 +149,21 @@ export default function App(): JSX.Element {
     if (!html) return
     if (kind === 'html') await window.orchid.exportHtml(html, `${base}.html`)
     else await window.orchid.exportPdf(html, `${base}.pdf`)
+  }
+
+  async function doExportPdf(opts: PdfOptions): Promise<void> {
+    const s = useStore.getState()
+    if (!s.activePath) return
+    const base = baseName(s.activePath).replace(/\.(md|markdown|mdx)$/i, '')
+    const html = await buildStandaloneHtml(base)
+    if (!html) return
+    const date = new Date().toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' })
+    const sub = (t: string): string => t.replace(/\{title\}/g, base).replace(/\{date\}/g, date)
+    await window.orchid.exportPdf(html, `${base}.pdf`, {
+      header: sub(opts.header),
+      footer: sub(opts.footer),
+      pageNumbers: opts.pageNumbers
+    })
   }
 
   // Save on ⌘S even when menu accelerator is intercepted by a focused field.
@@ -291,6 +320,25 @@ export default function App(): JSX.Element {
       <SearchPanel open={searchOpen} onClose={() => setSearchOpen(false)} />
       <ShortcutsPanel open={shortcutsOpen} onClose={() => setShortcutsOpen(false)} />
       <DeveloperPanel open={developerOpen} onClose={() => setDeveloperOpen(false)} />
+      <PdfDialog
+        open={pdfOpen}
+        onConfirm={(o) => {
+          setPdfOpen(false)
+          void doExportPdf(o)
+        }}
+        onClose={() => setPdfOpen(false)}
+      />
+      <UpdateDialog
+        info={update}
+        onDownload={() => {
+          if (update) window.orchid.openExternal(update.download)
+          setUpdate(null)
+        }}
+        onClose={() => {
+          if (update && !update.manual) localStorage.setItem('orchid.updateDismissed', update.version)
+          setUpdate(null)
+        }}
+      />
     </div>
   )
 }
