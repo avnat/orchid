@@ -1,0 +1,24 @@
+name: Feature request
+description: Suggest an idea for Orchid
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What's the need?
+      description: What are you trying to do that Orchid makes hard today?
+    validations:
+      required: true
+  - type: textarea
+    id: idea
+    attributes:
+      label: Your idea
+      description: How might it work? Orchid leans minimal and calm — keep that in mind.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+    validations:
+      required: false

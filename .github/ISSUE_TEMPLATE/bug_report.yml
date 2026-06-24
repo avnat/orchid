@@ -1,0 +1,43 @@
+name: Bug report
+description: Something isn't working right in Orchid
+labels: [bug]
+body:
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: What went wrong, and what did you expect instead?
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Open a folder…
+        2. Click…
+        3. See…
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Orchid version
+      description: See Orchid menu → About Orchid
+      placeholder: "1.1.2"
+    validations:
+      required: true
+  - type: input
+    id: macos
+    attributes:
+      label: macOS version
+      placeholder: "15.x / 26.x"
+    validations:
+      required: true
+  - type: textarea
+    id: extra
+    attributes:
+      label: Anything else?
+      description: Screenshots, sample Markdown (generic only, please), or notes.
+    validations:
+      required: false
