@@ -62,21 +62,26 @@ Press Return, then open Orchid normally. You only ever need this once.
 
 **Navigate**
 - **Folder-native** — open a folder and the sidebar shows your Markdown (and code/text files), nested structure preserved, noise (`node_modules`, dotfiles) hidden.
-- **Multi-folder workspaces** — keep several folders open at once, each a collapsible section. Add, close, or remove folders any time.
-- **Open a single file** too, when you don't need a whole folder.
-- **Recency-aware** — files touched in the last few minutes get a dot; sort by **Name** or **Recent**.
+- **Multi-folder workspaces** — keep several folders open at once, each a collapsible section. Add, close, or remove folders any time. Open a single file too.
+- **Pinned files** — pin your go-to files to a section at the top of the sidebar (right-click, or the pin that appears on hover).
+- **Keyboard navigation** — with the sidebar focused, `↑`/`↓` move through files; `⇧↑`/`⇧↓` and `⇧-click` extend a multi-file selection.
+- **Sort** — a compact menu: **Name (A–Z)** or **Recently edited**; every file shows a relative timestamp.
 - **Live** — new and changed files appear automatically; a **Refresh** button re-scans on demand.
-- **Find fast** — `⌘P` fuzzy switcher · `⌘⇧F` full-text search across folders · `⌘F` find-in-file · a scroll-spy table of contents.
+- **Find fast** — `⌘P` fuzzy switcher · `⌘⇧F` full-text search across folders · `⌘F` find-in-file · a scroll-spy table of contents with adjustable text size.
 
 **Read**
 - **Rich preview** — GFM tables, task lists, syntax-highlighted code, callouts, images, a frontmatter header, **KaTeX math**, and **Mermaid diagrams**.
-- **Built for focus** — refined typography; resizable panels; hide the sidebar (`⌘.`) and contents rail (`⌘⌥.`) for full-width reading.
-- **Themes** — light (*Bloom*) / dark (*Dusk*) following the system, **16 accent presets**, a **bring-your-own custom colour**, and adjustable sidebar text size.
+- **Built for focus** — refined typography; resizable panels; collapse the sidebar or contents rail right from the divider (a circular handle appears on hover), or one **focus button** to hide everything. A **Reading / Editing** badge always shows your mode.
+- **Themes** — light (*Bloom*) / dark (*Dusk*) following the system, **16 accent presets**, a **bring-your-own custom colour**, and adjustable sidebar & index text sizes.
 
 **Create & edit**
-- **New files** (any type — code files get syntax highlighting) and **folders**; extension-less files default to `.txt`.
-- **Light editing** — `⌘E` toggles a CodeMirror editor with a scroll-synced live preview; `⌘S` saves. Prompts before losing unsaved edits.
-- **Delete to Trash** with **multi-select**; **export** to self-contained HTML or PDF.
+- **New files** (`⌘N`) and **folders** (`⌘⇧N`) — from the menu or the sidebar `+`; code files get syntax highlighting; extension-less files default to `.txt`.
+- **Manage files** — **rename** (or double-click), **duplicate**, **move** by dragging onto a folder, **copy path / relative path**, and **delete to Trash** with **multi-select** — all from right-click.
+- **Light editing** — `⌘E` toggles a CodeMirror editor with a scroll-synced live preview (the cursor lands ready to type); `⌘S` saves. Prompts before losing unsaved edits.
+- **Export** — self-contained **HTML** or **PDF** with a customisable header, footer, and page numbers; always rendered light for clean printing and sharing.
+
+**Stay current**
+- **In-app updates** — Orchid checks for new releases and shows an in-app card when one's out (**Check for Updates…** in the app menu); one click to download.
 
 <div align="center">
 
@@ -88,7 +93,7 @@ Orchid follows your system appearance — **Bloom** (light) and **Dusk** (dark) 
 <br/><em>Dusk — the same document in dark mode</em>
 <br/><br/>
 <img src="docs/img/workspace.png" width="780" alt="Multi-folder workspace with rich preview" />
-<br/><em>Multi-folder workspaces · recency badges · contents rail</em>
+<br/><em>Pinned files · multi-folder workspaces · contents rail</em>
 <br/><br/>
 <img src="docs/img/themes.png" width="780" alt="Accent presets" />
 <br/><em>16 accent presets + a custom colour</em>
