@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import type { MdNode, WorkspaceFolder } from '../types'
 import { useStore, type SortMode } from '../store/useStore'
 import Resizer from './Resizer'
+import NameDialog from './NameDialog'
 
 function relAge(mtimeMs?: number): { isNew: boolean; label: string | null } {
   if (!mtimeMs) return { isNew: false, label: null }
@@ -55,6 +56,8 @@ function TreeNodes({
 }): JSX.Element {
   const activePath = useStore((s) => s.activePath)
   const selectFile = useStore((s) => s.selectFile)
+  const selected = useStore((s) => s.selected)
+  const toggleSelected = useStore((s) => s.toggleSelected)
 
   return (
     <>
@@ -80,13 +83,20 @@ function TreeNodes({
         return (
           <li key={n.path}>
             <div
-              className={`node ${activePath === n.path ? 'active' : ''}`}
+              className={`node ${activePath === n.path ? 'active' : ''} ${selected.includes(n.path) ? 'selected' : ''}`}
               style={pad}
               title={n.relPath}
-              onClick={() => selectFile(n.path)}
+              onClick={(e) => {
+                if (e.metaKey || e.ctrlKey) {
+                  e.preventDefault()
+                  toggleSelected(n.path)
+                } else {
+                  selectFile(n.path)
+                }
+              }}
               onContextMenu={(e) => {
                 e.preventDefault()
-                window.orchid.reveal(n.path)
+                window.orchid.fileMenu(n.path)
               }}
             >
               <span className="ic" />
@@ -105,24 +115,49 @@ function FolderSection({
   filter,
   sortMode,
   collapsed,
-  toggle
+  toggle,
+  onNew
 }: {
   folder: WorkspaceFolder
   filter: string
   sortMode: SortMode
   collapsed: Set<string>
   toggle: (path: string) => void
+  onNew: (mode: 'file' | 'folder', dir: string) => void
 }): JSX.Element {
-  const multi = useStore((s) => s.folders.length > 1)
+  const activePath = useStore((s) => s.activePath)
+  const selectFile = useStore((s) => s.selectFile)
   const shown = useMemo(() => sortTree(filterTree(folder.tree, filter), sortMode), [folder.tree, filter, sortMode])
   const isCollapsed = collapsed.has(folder.root)
+  const [menuOpen, setMenuOpen] = useState(false)
 
-  // Single opened file: render just the file, no folder header.
+  // Single opened file: a row with its name + close.
   if (folder.isFile) {
+    const f = folder.tree[0]
     return (
-      <ul className="tree">
-        <TreeNodes nodes={shown} depth={0} collapsed={collapsed} toggle={toggle} />
-      </ul>
+      <div className="folder-section">
+        <div
+          className={`node single ${activePath === f.path ? 'active' : ''}`}
+          onClick={() => selectFile(f.path)}
+          onContextMenu={(e) => {
+            e.preventDefault()
+            window.orchid.fileMenu(f.path)
+          }}
+        >
+          <span className="ic" />
+          <span className="name">{f.name}</span>
+          <button
+            className="folder-close"
+            title="Close"
+            onClick={(e) => {
+              e.stopPropagation()
+              window.orchid.closeFolder(folder.root)
+            }}
+          >
+            ✕
+          </button>
+        </div>
+      </div>
     )
   }
 
@@ -135,22 +170,58 @@ function FolderSection({
         <span className="folder-name" onClick={() => toggle(folder.root)} title={folder.root}>
           {folder.name}
         </span>
-        {multi && (
+        <span className="folder-actions">
+          <button
+            className="folder-add"
+            title="New file or folder"
+            onClick={(e) => {
+              e.stopPropagation()
+              setMenuOpen((o) => !o)
+            }}
+          >
+            +
+          </button>
           <button
             className="folder-close"
-            title="Remove from workspace"
-            onClick={() => window.orchid.closeFolder(folder.root)}
+            title="Close folder"
+            onClick={(e) => {
+              e.stopPropagation()
+              window.orchid.closeFolder(folder.root)
+            }}
           >
             ✕
           </button>
-        )}
+          {menuOpen && (
+            <>
+              <div className="menu-scrim" onClick={() => setMenuOpen(false)} />
+              <div className="mini-menu">
+                <button
+                  onClick={() => {
+                    setMenuOpen(false)
+                    onNew('file', folder.root)
+                  }}
+                >
+                  New file…
+                </button>
+                <button
+                  onClick={() => {
+                    setMenuOpen(false)
+                    onNew('folder', folder.root)
+                  }}
+                >
+                  New folder…
+                </button>
+              </div>
+            </>
+          )}
+        </span>
       </div>
       {!isCollapsed && (
         <ul className="tree">
           {shown.length ? (
             <TreeNodes nodes={shown} depth={0} collapsed={collapsed} toggle={toggle} />
           ) : (
-            <li className="tree-empty">No markdown files</li>
+            <li className="tree-empty">No files yet</li>
           )}
         </ul>
       )}
@@ -165,7 +236,11 @@ export default function Sidebar(): JSX.Element {
   const sortMode = useStore((s) => s.sortMode)
   const setSortMode = useStore((s) => s.setSortMode)
   const setSidebarWidth = useStore((s) => s.setSidebarWidth)
+  const selectFile = useStore((s) => s.selectFile)
+  const selected = useStore((s) => s.selected)
+  const clearSelected = useStore((s) => s.clearSelected)
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set())
+  const [dialog, setDialog] = useState<{ mode: 'file' | 'folder'; dir: string } | null>(null)
 
   const toggle = (path: string): void =>
     setCollapsed((prev) => {
@@ -173,6 +248,22 @@ export default function Sidebar(): JSX.Element {
       next.has(path) ? next.delete(path) : next.add(path)
       return next
     })
+
+  const onNew = (mode: 'file' | 'folder', dir: string): void => setDialog({ mode, dir })
+
+  const handleCreate = async (name: string): Promise<void> => {
+    if (!dialog) return
+    try {
+      if (dialog.mode === 'file') {
+        const path = await window.orchid.createFile(dialog.dir, name)
+        await selectFile(path)
+      } else {
+        await window.orchid.createFolder(dialog.dir, name)
+      }
+    } catch (err) {
+      window.alert(err instanceof Error ? err.message : String(err))
+    }
+  }
 
   return (
     <aside className="sidebar">
@@ -197,6 +288,30 @@ export default function Sidebar(): JSX.Element {
         </button>
       </div>
 
+      {selected.length > 0 && (
+        <div className="select-bar">
+          <span>
+            {selected.length} selected <span className="select-hint">(⌘-click)</span>
+          </span>
+          <span className="select-actions">
+            <button
+              className="select-trash"
+              onClick={async () => {
+                if (window.confirm(`Move ${selected.length} item(s) to Trash?`)) {
+                  await window.orchid.trashMany(selected)
+                  clearSelected()
+                }
+              }}
+            >
+              Move to Trash
+            </button>
+            <button className="select-clear" onClick={clearSelected}>
+              Clear
+            </button>
+          </span>
+        </div>
+      )}
+
       <div className="side-scroll">
         {folders.map((f) => (
           <FolderSection
@@ -206,12 +321,22 @@ export default function Sidebar(): JSX.Element {
             sortMode={sortMode}
             collapsed={collapsed}
             toggle={toggle}
+            onNew={onNew}
           />
         ))}
         <button className="add-folder" onClick={() => window.orchid.addFolder()}>
           + Add folder
         </button>
       </div>
+
+      <NameDialog
+        open={!!dialog}
+        title={dialog?.mode === 'folder' ? 'New folder' : 'New file'}
+        placeholder={dialog?.mode === 'folder' ? 'folder-name' : 'filename.md'}
+        onSubmit={handleCreate}
+        onClose={() => setDialog(null)}
+      />
+
       <Resizer side="right" onResize={(x) => setSidebarWidth(x)} />
     </aside>
   )

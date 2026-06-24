@@ -21,6 +21,11 @@ export interface OrchidApi {
   closeFolder: (root: string) => Promise<void>
   refresh: () => Promise<void>
   rescan: (changedPath: string) => Promise<void>
+  createFile: (dir: string, name: string) => Promise<string>
+  createFolder: (parentDir: string, name: string) => Promise<string>
+  trash: (path: string) => Promise<boolean>
+  trashMany: (paths: string[]) => Promise<boolean>
+  fileMenu: (path: string) => Promise<void>
   readFile: (path: string) => Promise<string>
   writeFile: (path: string, content: string) => Promise<boolean>
   reveal: (path: string) => Promise<void>
@@ -45,6 +50,7 @@ export interface OrchidApi {
   onExportHtml: (cb: () => void) => () => void
   onExportPdf: (cb: () => void) => () => void
   onShortcuts: (cb: () => void) => () => void
+  onDeveloper: (cb: () => void) => () => void
   onFindResult: (cb: (p: { active: number; total: number }) => void) => () => void
   onSaveAndClose: (cb: () => void) => () => void
 }

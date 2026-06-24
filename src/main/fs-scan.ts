@@ -3,6 +3,38 @@ import { join, relative } from 'path'
 
 export const MD_EXTENSIONS = ['.md', '.markdown', '.mdx']
 
+// Files Orchid surfaces: markdown first, plus common text/code files so created
+// files show up and code gets syntax highlighting.
+export const TEXT_EXTENSIONS = [
+  ...MD_EXTENSIONS,
+  '.txt',
+  '.json',
+  '.yaml',
+  '.yml',
+  '.toml',
+  '.csv',
+  '.py',
+  '.swift',
+  '.c',
+  '.h',
+  '.cpp',
+  '.cc',
+  '.hpp',
+  '.js',
+  '.jsx',
+  '.ts',
+  '.tsx',
+  '.go',
+  '.rs',
+  '.java',
+  '.rb',
+  '.sh',
+  '.css',
+  '.html',
+  '.xml',
+  '.sql'
+]
+
 const IGNORED_DIRS = new Set([
   'node_modules',
   '.git',
@@ -28,9 +60,9 @@ export interface MdNode {
   children?: MdNode[]
 }
 
-function isMarkdown(name: string): boolean {
+function isShown(name: string): boolean {
   const lower = name.toLowerCase()
-  return MD_EXTENSIONS.some((ext) => lower.endsWith(ext))
+  return TEXT_EXTENSIONS.some((ext) => lower.endsWith(ext))
 }
 
 /**
@@ -64,7 +96,7 @@ export async function scanFolder(root: string, dir: string = root): Promise<MdNo
           children
         })
       }
-    } else if (entry.isFile() && isMarkdown(name)) {
+    } else if (entry.isFile() && isShown(name)) {
       let mtimeMs = 0
       try {
         mtimeMs = (await fs.stat(fullPath)).mtimeMs

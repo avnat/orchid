@@ -19,8 +19,10 @@ export default function ThemePicker(): JSX.Element {
   const accentKey = useStore((s) => s.accentKey)
   const systemDark = useStore((s) => s.systemDark)
   const sidebarTextSize = useStore((s) => s.sidebarTextSize)
+  const customAccent = useStore((s) => s.customAccent)
   const setAppearance = useStore((s) => s.setAppearance)
   const setAccent = useStore((s) => s.setAccent)
+  const setCustomAccent = useStore((s) => s.setCustomAccent)
   const setSidebarTextSize = useStore((s) => s.setSidebarTextSize)
 
   const [open, setOpen] = useState(false)
@@ -88,6 +90,16 @@ export default function ThemePicker(): JSX.Element {
                 <span className="swatch-name">{a.name}</span>
               </button>
             ))}
+            <label className={accentKey === 'custom' ? 'swatch on' : 'swatch'} title="Pick your own color">
+              <span className="ring custom-ring" style={{ background: customAccent }} />
+              <span className="swatch-name">Custom</span>
+              <input
+                type="color"
+                className="custom-color-input"
+                value={customAccent}
+                onChange={(e) => setCustomAccent(e.target.value)}
+              />
+            </label>
           </div>
 
           <div className="pop-label">Sidebar text size</div>

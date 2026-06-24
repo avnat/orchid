@@ -1,6 +1,6 @@
 import chokidar, { FSWatcher } from 'chokidar'
 import { BrowserWindow } from 'electron'
-import { MD_EXTENSIONS } from './fs-scan'
+import { TEXT_EXTENSIONS } from './fs-scan'
 
 let watcher: FSWatcher | null = null
 
@@ -23,7 +23,7 @@ export function watchPaths(paths: string[], win: BrowserWindow | null): void {
     awaitWriteFinish: { stabilityThreshold: 120, pollInterval: 40 }
   })
 
-  const isMd = (p: string): boolean => MD_EXTENSIONS.some((e) => p.toLowerCase().endsWith(e))
+  const isMd = (p: string): boolean => TEXT_EXTENSIONS.some((e) => p.toLowerCase().endsWith(e))
   const send = (channel: string, payload: unknown): void => {
     if (!win.isDestroyed()) win.webContents.send(channel, payload)
   }

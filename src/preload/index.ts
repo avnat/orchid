@@ -29,6 +29,12 @@ const api = {
   openPath: (path: string): Promise<void> => ipcRenderer.invoke('workspace:openPath', path),
   closeFolder: (root: string): Promise<void> => ipcRenderer.invoke('workspace:closeFolder', root),
   refresh: (): Promise<void> => ipcRenderer.invoke('workspace:refresh'),
+  createFile: (dir: string, name: string): Promise<string> => ipcRenderer.invoke('fs:createFile', dir, name),
+  createFolder: (parentDir: string, name: string): Promise<string> =>
+    ipcRenderer.invoke('fs:createFolder', parentDir, name),
+  trash: (path: string): Promise<boolean> => ipcRenderer.invoke('fs:trash', path),
+  trashMany: (paths: string[]): Promise<boolean> => ipcRenderer.invoke('fs:trashMany', paths),
+  fileMenu: (path: string): Promise<void> => ipcRenderer.invoke('fs:fileMenu', path),
   rescan: (changedPath: string): Promise<void> => ipcRenderer.invoke('workspace:rescan', changedPath),
   readFile: (path: string): Promise<string> => ipcRenderer.invoke('fs:read', path),
   writeFile: (path: string, content: string): Promise<boolean> =>
@@ -65,6 +71,7 @@ const api = {
   onExportHtml: (cb: () => void) => on('cmd:export-html', cb),
   onExportPdf: (cb: () => void) => on('cmd:export-pdf', cb),
   onShortcuts: (cb: () => void) => on('cmd:shortcuts', cb),
+  onDeveloper: (cb: () => void) => on('cmd:developer', cb),
   onFindResult: (cb: (p: { active: number; total: number }) => void) => on('find:result', cb),
   onSaveAndClose: (cb: () => void) => on('app:save-and-close', cb)
 }

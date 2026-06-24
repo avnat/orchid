@@ -7,8 +7,10 @@ import ThemePicker from './components/ThemePicker'
 import CommandPalette from './components/CommandPalette'
 import SearchPanel from './components/SearchPanel'
 import ShortcutsPanel from './components/ShortcutsPanel'
+import DeveloperPanel from './components/DeveloperPanel'
 import FindBar from './components/FindBar'
 import { buildStandaloneHtml } from './markdown/exportDoc'
+import { isMarkdownFile } from './markdown/langs'
 import { accentByKey } from './themes'
 
 function baseName(p: string): string {
@@ -23,6 +25,7 @@ export default function App(): JSX.Element {
   const focusMode = useStore((s) => s.focusMode)
   const appearance = useStore((s) => s.appearance)
   const accentKey = useStore((s) => s.accentKey)
+  const customAccent = useStore((s) => s.customAccent)
   const systemDark = useStore((s) => s.systemDark)
   const tocVisible = useStore((s) => s.tocVisible)
   const sidebarWidth = useStore((s) => s.sidebarWidth)
@@ -30,6 +33,7 @@ export default function App(): JSX.Element {
   const [paletteOpen, setPaletteOpen] = useState(false)
   const [searchOpen, setSearchOpen] = useState(false)
   const [shortcutsOpen, setShortcutsOpen] = useState(false)
+  const [developerOpen, setDeveloperOpen] = useState(false)
   const [findOpen, setFindOpen] = useState(false)
 
   // Track the OS appearance.
@@ -45,9 +49,13 @@ export default function App(): JSX.Element {
   useEffect(() => {
     const root = document.documentElement
     root.dataset.theme = dark ? 'dusk' : 'bloom'
-    const accent = accentByKey(accentKey)
-    root.style.setProperty('--accent', dark ? accent.dark : accent.light)
-  }, [dark, accentKey])
+    if (accentKey === 'custom') {
+      root.style.setProperty('--accent', customAccent)
+    } else {
+      const accent = accentByKey(accentKey)
+      root.style.setProperty('--accent', dark ? accent.dark : accent.light)
+    }
+  }, [dark, accentKey, customAccent])
 
   // Configurable sidebar text size (S / M / L).
   useEffect(() => {
@@ -79,6 +87,7 @@ export default function App(): JSX.Element {
       window.orchid.onExportHtml(() => void doExport('html')),
       window.orchid.onExportPdf(() => void doExport('pdf')),
       window.orchid.onShortcuts(() => setShortcutsOpen(true)),
+      window.orchid.onDeveloper(() => setDeveloperOpen(true)),
       // Save-and-close: main asked us to persist before quitting.
       window.orchid.onSaveAndClose(async () => {
         await useStore.getState().save()
@@ -129,9 +138,9 @@ export default function App(): JSX.Element {
         e.preventDefault()
         if (useStore.getState().folders.length) setSearchOpen(true)
       } else if ((e.metaKey || e.ctrlKey) && !e.shiftKey && (e.key === 'f' || e.key === 'F')) {
-        // ⌘F = find in the current file (preview only; CodeMirror owns ⌘F in edit mode)
+        // ⌘F = find in a rendered markdown preview (code files keep CodeMirror's own ⌘F)
         const st = useStore.getState()
-        if (st.activePath && !st.editMode) {
+        if (st.activePath && isMarkdownFile(st.activePath) && !st.editMode) {
           e.preventDefault()
           setFindOpen(true)
         }
@@ -255,6 +264,7 @@ export default function App(): JSX.Element {
       <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} />
       <SearchPanel open={searchOpen} onClose={() => setSearchOpen(false)} />
       <ShortcutsPanel open={shortcutsOpen} onClose={() => setShortcutsOpen(false)} />
+      <DeveloperPanel open={developerOpen} onClose={() => setDeveloperOpen(false)} />
     </div>
   )
 }

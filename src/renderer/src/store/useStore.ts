@@ -35,6 +35,11 @@ interface OrchidState {
   systemDark: boolean
   appearance: Appearance
   accentKey: string
+  customAccent: string
+  /** active file can't be shown as text (binary/unsupported) */
+  unsupported: boolean
+  /** multi-selected file paths (for batch delete) */
+  selected: string[]
   tocVisible: boolean
   sortMode: SortMode
   sidebarWidth: number
@@ -57,6 +62,9 @@ interface OrchidState {
   setSystemDark: (dark: boolean) => void
   setAppearance: (a: Appearance) => void
   setAccent: (key: string) => void
+  setCustomAccent: (hex: string) => void
+  toggleSelected: (path: string) => void
+  clearSelected: () => void
   setFilter: (q: string) => void
   onExternalChange: (path: string) => void
   resolveConflict: (action: 'mine' | 'theirs') => Promise<void>
@@ -84,6 +92,9 @@ export const useStore = create<OrchidState>((set, get) => ({
   systemDark: false,
   appearance: lsGet('orchid.appearance', 'system') as Appearance,
   accentKey: lsGet('orchid.accent', 'orchid'),
+  customAccent: lsGet('orchid.customAccent', '#7c4dd6'),
+  unsupported: false,
+  selected: [],
   tocVisible: lsGet('orchid.toc', 'true') !== 'false',
   sortMode: lsGet('orchid.sort', 'name') as SortMode,
   sidebarWidth: Math.min(520, Math.max(180, Number(lsGet('orchid.sidebarW', '248')) || 248)),
@@ -94,6 +105,7 @@ export const useStore = create<OrchidState>((set, get) => ({
   setWorkspace: (folders, select) =>
     set((s) => ({
       folders,
+      selected: [],
       // drop active selection (and any edit/conflict state) if its file no
       // longer exists in the workspace
       ...(select
@@ -128,8 +140,13 @@ export const useStore = create<OrchidState>((set, get) => ({
       const ok = window.confirm('Discard unsaved changes to the current file?')
       if (!ok) return
     }
-    const text = await window.orchid.readFile(path)
-    set({ activePath: path, content: text, savedContent: text, conflict: false })
+    try {
+      const text = await window.orchid.readFile(path)
+      set({ activePath: path, content: text, savedContent: text, conflict: false, unsupported: false, selected: [] })
+    } catch {
+      // binary / unsupported file — show a friendly message instead of garbage
+      set({ activePath: path, content: '', savedContent: '', conflict: false, unsupported: true, editMode: false, selected: [] })
+    }
   },
 
   reloadActive: async () => {
@@ -165,6 +182,16 @@ export const useStore = create<OrchidState>((set, get) => ({
     lsSet('orchid.accent', accentKey)
     set({ accentKey })
   },
+  setCustomAccent: (hex) => {
+    lsSet('orchid.customAccent', hex)
+    lsSet('orchid.accent', 'custom')
+    set({ customAccent: hex, accentKey: 'custom' })
+  },
+  toggleSelected: (path) =>
+    set((s) => ({
+      selected: s.selected.includes(path) ? s.selected.filter((p) => p !== path) : [...s.selected, path]
+    })),
+  clearSelected: () => set({ selected: [] }),
   setFilter: (q) => set({ filter: q }),
 
   onExternalChange: (path) => {

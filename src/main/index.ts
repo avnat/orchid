@@ -2,10 +2,10 @@ import { app, shell, BrowserWindow, ipcMain, dialog, Menu, nativeTheme, protocol
 import { join, resolve, relative, sep, basename, dirname } from 'path'
 import { promises as fs } from 'fs'
 import { pathToFileURL } from 'url'
-import { scanFolder, type MdNode } from './fs-scan'
+import { scanFolder, TEXT_EXTENSIONS, type MdNode } from './fs-scan'
 import { watchPaths, stopWatching } from './watcher'
 
-const MD_RE = /\.(md|markdown|mdx)$/i
+const TEXT_RE = new RegExp('\\.(' + TEXT_EXTENSIONS.map((e) => e.slice(1)).join('|') + ')$', 'i')
 
 interface WSFolder {
   root: string
@@ -116,19 +116,19 @@ async function openFolderDialog(add: boolean): Promise<void> {
   await openFolder(result.filePaths[0], add)
 }
 
-/** One dialog that accepts a folder OR a single markdown file (macOS allows both). */
+/** One dialog that accepts a folder OR a single file (macOS allows both). */
 async function openDialog(): Promise<void> {
   if (!mainWindow) return
   const result = await dialog.showOpenDialog(mainWindow, {
     properties: ['openFile', 'openDirectory'],
-    filters: [{ name: 'Markdown', extensions: ['md', 'markdown', 'mdx'] }],
-    message: 'Open a folder or a markdown file'
+    filters: [{ name: 'Text & code', extensions: TEXT_EXTENSIONS.map((e) => e.slice(1)) }],
+    message: 'Open a folder or a file'
   })
   if (result.canceled || result.filePaths.length === 0) return
   const p = result.filePaths[0]
   const stat = await fs.stat(p).catch(() => null)
   if (stat?.isDirectory()) await openFolder(p, false)
-  else if (stat?.isFile() && MD_RE.test(p)) await openFile(p)
+  else if (stat?.isFile() && TEXT_RE.test(p)) await openFile(p)
 }
 
 function createWindow(): void {
@@ -270,7 +270,10 @@ function buildMenu(): void {
     {
       role: 'help',
       submenu: [
-        { label: 'Keyboard Shortcuts', accelerator: 'CmdOrCtrl+/', click: () => mainWindow?.webContents.send('cmd:shortcuts') }
+        { label: 'Keyboard Shortcuts', accelerator: 'CmdOrCtrl+/', click: () => mainWindow?.webContents.send('cmd:shortcuts') },
+        { label: 'Contributing & Developer Info', click: () => mainWindow?.webContents.send('cmd:developer') },
+        { type: 'separator' },
+        { label: 'View Project on GitHub', click: () => shell.openExternal('https://github.com/avnat/orchid') }
       ]
     }
   ]
@@ -386,7 +389,15 @@ ipcMain.handle('dialog:addFolder', async () => openFolderDialog(true))
 ipcMain.handle('workspace:openPath', async (_e, p: string) => {
   const stat = await fs.stat(p).catch(() => null)
   if (stat?.isDirectory()) await openFolder(p, workspace.length > 0)
-  else if (stat?.isFile() && MD_RE.test(p)) await openFile(p)
+  else if (stat?.isFile() && TEXT_RE.test(p)) await openFile(p)
+  else if (stat?.isFile() && mainWindow) {
+    dialog.showMessageBox(mainWindow, {
+      type: 'info',
+      buttons: ['OK'],
+      message: "Can't open this file",
+      detail: `Orchid reads text and Markdown files. "${basename(p)}" isn't a type it can display.`
+    })
+  }
 })
 
 ipcMain.handle('workspace:closeFolder', async (_e, root: string) => closeFolder(root))
@@ -395,7 +406,10 @@ ipcMain.handle('workspace:rescan', async (_e, changedPath: string) => rescanFold
 
 ipcMain.handle('fs:read', async (_e, filePath: string) => {
   if (!withinWorkspace(filePath)) throw new Error('Path outside the workspace')
-  return fs.readFile(filePath, 'utf8')
+  const buf = await fs.readFile(filePath)
+  // crude binary sniff — a NUL byte near the start means it isn't text we can show
+  if (buf.subarray(0, 8000).includes(0)) throw new Error('UNSUPPORTED_BINARY')
+  return buf.toString('utf8')
 })
 
 ipcMain.handle('fs:write', async (_e, filePath: string, content: string) => {
@@ -407,6 +421,56 @@ ipcMain.handle('fs:write', async (_e, filePath: string, content: string) => {
 ipcMain.handle('fs:reveal', async (_e, filePath: string) => {
   if (!withinWorkspace(filePath)) return
   shell.showItemInFolder(filePath)
+})
+
+// ---- File / folder operations ----
+ipcMain.handle('fs:createFile', async (_e, dir: string, name: string) => {
+  // Default to .txt when no extension is given (Sublime-style).
+  const fname = /\.[^/.]+$/.test(basename(name)) ? name : `${name}.txt`
+  const target = join(dir, fname)
+  if (!withinWorkspace(target)) throw new Error('Path outside the workspace')
+  // refuse to clobber an existing file
+  if (await fs.stat(target).then(() => true).catch(() => false)) {
+    throw new Error('A file with that name already exists')
+  }
+  await fs.mkdir(dirname(target), { recursive: true })
+  await fs.writeFile(target, '', 'utf8')
+  return target
+})
+
+ipcMain.handle('fs:createFolder', async (_e, parentDir: string, name: string) => {
+  const target = join(parentDir, name)
+  if (!withinWorkspace(target)) throw new Error('Path outside the workspace')
+  await fs.mkdir(target, { recursive: true })
+  return target
+})
+
+ipcMain.handle('fs:trash', async (_e, target: string) => {
+  if (!withinWorkspace(target)) throw new Error('Path outside the workspace')
+  await shell.trashItem(target)
+  return true
+})
+
+ipcMain.handle('fs:trashMany', async (_e, paths: string[]) => {
+  for (const p of paths) {
+    if (withinWorkspace(p)) await shell.trashItem(p).catch(() => {})
+  }
+  return true
+})
+
+ipcMain.handle('fs:fileMenu', (_e, target: string) => {
+  if (!withinWorkspace(target)) return
+  const menu = Menu.buildFromTemplate([
+    { label: 'Reveal in Finder', click: () => shell.showItemInFolder(target) },
+    { type: 'separator' },
+    {
+      label: 'Move to Trash',
+      click: async () => {
+        if (withinWorkspace(target)) await shell.trashItem(target).catch(() => {})
+      }
+    }
+  ])
+  menu.popup({ window: mainWindow ?? undefined })
 })
 
 ipcMain.handle('shell:openExternal', async (_e, url: string) => {

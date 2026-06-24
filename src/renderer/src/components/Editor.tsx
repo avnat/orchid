@@ -2,14 +2,30 @@ import { useMemo } from 'react'
 import CodeMirror from '@uiw/react-codemirror'
 import { markdown } from '@codemirror/lang-markdown'
 import { EditorView } from '@codemirror/view'
+import { EditorState, type Extension } from '@codemirror/state'
 import { createTheme } from '@uiw/codemirror-themes'
+import { tags as t } from '@lezer/highlight'
 import { useStore } from '../store/useStore'
+
+/** Blend two #rrggbb colors (ratio 0 = a, 1 = b). */
+function mix(a: string, b: string, r: number): string {
+  const pa = [1, 3, 5].map((i) => parseInt(a.slice(i, i + 2), 16))
+  const pb = [1, 3, 5].map((i) => parseInt(b.slice(i, i + 2), 16))
+  const c = pa.map((v, i) => Math.round(v + (pb[i] - v) * r))
+  return '#' + c.map((v) => v.toString(16).padStart(2, '0')).join('')
+}
 
 export default function Editor({
   dark,
+  language,
+  readOnly = false,
+  showLineNumbers = false,
   onScrollFraction
 }: {
   dark: boolean
+  language?: Extension | null
+  readOnly?: boolean
+  showLineNumbers?: boolean
   onScrollFraction?: (fraction: number) => void
 }): JSX.Element {
   const content = useStore((s) => s.content)
@@ -18,23 +34,45 @@ export default function Editor({
 
   const theme = useMemo(() => {
     const root = getComputedStyle(document.documentElement)
-    const accent = root.getPropertyValue('--accent').trim() || '#7e6bb8'
+    let accent = root.getPropertyValue('--accent').trim() || '#7e6bb8'
+    if (accent.length === 4) accent = '#' + accent.slice(1).replace(/./g, (c) => c + c) // #abc → #aabbcc
+    const fg = dark ? '#e8e5ef' : '#1b1a21'
+    const muted = dark ? '#928ca0' : '#6e6a78'
+    const str = mix(accent, fg, 0.5)
+    const lit = mix(accent, fg, 0.25)
     return createTheme({
       theme: dark ? 'dark' : 'light',
       settings: {
         background: dark ? '#1c1a22' : '#ffffff',
-        foreground: dark ? '#e8e5ef' : '#1b1a21',
+        foreground: fg,
         caret: accent,
         selection: accent + '33',
         selectionMatch: accent + '22',
         lineHighlight: 'transparent',
         gutterBackground: 'transparent',
-        gutterForeground: dark ? '#928ca0' : '#6e6a78'
+        gutterForeground: muted
       },
-      styles: []
+      styles: [
+        { tag: [t.keyword, t.controlKeyword, t.moduleKeyword, t.operatorKeyword], color: accent, fontWeight: '600' },
+        { tag: [t.comment, t.lineComment, t.blockComment], color: muted, fontStyle: 'italic' },
+        { tag: [t.string, t.special(t.string), t.regexp], color: str },
+        { tag: [t.number, t.bool, t.null, t.atom], color: lit },
+        { tag: [t.className, t.typeName, t.definition(t.typeName)], color: fg, fontWeight: '600' },
+        { tag: [t.function(t.variableName), t.definition(t.variableName)], color: fg },
+        { tag: [t.propertyName, t.attributeName], color: mix(accent, fg, 0.4) },
+        { tag: [t.operator, t.punctuation, t.bracket], color: muted },
+        { tag: [t.tagName], color: accent },
+        { tag: [t.heading], color: accent, fontWeight: '600' }
+      ]
     })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dark, accentKey])
+
+  const extensions = useMemo(() => {
+    const exts: Extension[] = [language ?? markdown(), EditorView.lineWrapping]
+    if (readOnly) exts.push(EditorState.readOnly.of(true), EditorView.editable.of(false))
+    return exts
+  }, [language, readOnly])
 
   return (
     <CodeMirror
@@ -42,9 +80,12 @@ export default function Editor({
       value={content}
       height="100%"
       theme={theme}
-      extensions={[markdown(), EditorView.lineWrapping]}
-      basicSetup={{ lineNumbers: false, foldGutter: false, highlightActiveLine: false }}
-      onChange={(v) => setContent(v)}
+      extensions={extensions}
+      editable={!readOnly}
+      basicSetup={{ lineNumbers: showLineNumbers, foldGutter: false, highlightActiveLine: false }}
+      onChange={(v) => {
+        if (!readOnly) setContent(v)
+      }}
       onCreateEditor={(view) => {
         view.scrollDOM.addEventListener('scroll', () => {
           const el = view.scrollDOM

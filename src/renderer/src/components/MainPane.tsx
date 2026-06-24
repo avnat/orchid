@@ -1,15 +1,17 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useMemo, useRef } from 'react'
 import { useStore } from '../store/useStore'
 import MarkdownView from '../markdown/MarkdownView'
 import ConflictBanner from './ConflictBanner'
 import Toc from './Toc'
 import Editor from './Editor'
+import { isMarkdownFile, langForFile } from '../markdown/langs'
 
 export default function MainPane(): JSX.Element {
   const activePath = useStore((s) => s.activePath)
   const content = useStore((s) => s.content)
   const editMode = useStore((s) => s.editMode)
   const conflict = useStore((s) => s.conflict)
+  const unsupported = useStore((s) => s.unsupported)
   const tocVisible = useStore((s) => s.tocVisible)
   const appearance = useStore((s) => s.appearance)
   const systemDark = useStore((s) => s.systemDark)
@@ -28,6 +30,9 @@ export default function MainPane(): JSX.Element {
     if (el) el.scrollTop = fraction * (el.scrollHeight - el.clientHeight)
   }
 
+  const isMd = !!activePath && isMarkdownFile(activePath)
+  const codeLang = useMemo(() => (activePath ? langForFile(activePath) : null), [activePath])
+
   if (!activePath) {
     return (
       <div className="main">
@@ -35,6 +40,37 @@ export default function MainPane(): JSX.Element {
           <div className="reading">
             <p style={{ color: 'var(--muted)' }}>Select a file from the sidebar to preview it.</p>
           </div>
+        </div>
+      </div>
+    )
+  }
+
+  // Files we can't read as text (binary / unsupported).
+  if (unsupported) {
+    return (
+      <div className="main">
+        <div className="scroller">
+          <div className="unsupported">
+            <div className="unsupported-mark">⌧</div>
+            <p className="unsupported-title">Can't display this file</p>
+            <p className="unsupported-sub">It looks like a binary or unsupported format — Orchid shows text and Markdown.</p>
+            <button className="cta" onClick={() => activePath && window.orchid.reveal(activePath)}>
+              Reveal in Finder
+            </button>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  // Non-markdown (code/text): show it in the editor with syntax highlighting —
+  // read-only in Preview, editable in Edit.
+  if (!isMd) {
+    return (
+      <div className="main">
+        {conflict && <ConflictBanner />}
+        <div className="codeview">
+          <Editor dark={dark} language={codeLang} readOnly={!editMode} showLineNumbers />
         </div>
       </div>
     )
