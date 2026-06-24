@@ -4,16 +4,29 @@ import { useStore, type SortMode } from '../store/useStore'
 import Resizer from './Resizer'
 import NameDialog from './NameDialog'
 
-function relAge(mtimeMs?: number): { isNew: boolean; label: string | null } {
-  if (!mtimeMs) return { isNew: false, label: null }
-  const min = (Date.now() - mtimeMs) / 60000
-  if (min < 10) return { isNew: true, label: null }
-  if (min < 60) return { isNew: false, label: `${Math.round(min)}m` }
-  const hr = min / 60
-  if (hr < 24) return { isNew: false, label: `${Math.round(hr)}h` }
-  const d = hr / 24
-  if (d < 14) return { isNew: false, label: `${Math.round(d)}d` }
-  return { isNew: false, label: null }
+/** A node's path plus every descendant path (for selecting a whole folder). */
+function collectPaths(node: MdNode): string[] {
+  const out = [node.path]
+  for (const c of node.children ?? []) out.push(...collectPaths(c))
+  return out
+}
+
+/** Compact relative time, always shown (no live timer — recomputed on re-render). */
+function relTime(mtimeMs?: number): string {
+  if (!mtimeMs) return ''
+  const s = (Date.now() - mtimeMs) / 1000
+  if (s < 60) return 'now'
+  const m = s / 60
+  if (m < 60) return `${Math.round(m)}m`
+  const h = m / 60
+  if (h < 24) return `${Math.round(h)}h`
+  const d = h / 24
+  if (d < 7) return `${Math.round(d)}d`
+  const w = d / 7
+  if (w < 5) return `${Math.round(w)}w`
+  const mo = d / 30
+  if (mo < 12) return `${Math.round(mo)}mo`
+  return `${Math.round(d / 365)}y`
 }
 
 function filterTree(nodes: MdNode[], q: string): MdNode[] {
@@ -34,30 +47,48 @@ function filterTree(nodes: MdNode[], q: string): MdNode[] {
   return walk(nodes)
 }
 
+/** Most-recent mtime among a node and its descendants (folders bubble up by their newest file). */
+function recencyOf(n: MdNode): number {
+  if (n.type === 'file') return n.mtimeMs ?? 0
+  return (n.children ?? []).reduce((max, c) => Math.max(max, recencyOf(c)), 0)
+}
+
 function sortTree(nodes: MdNode[], mode: SortMode): MdNode[] {
-  const dirs = nodes.filter((n) => n.type === 'dir')
-  const files = nodes.filter((n) => n.type === 'file')
-  dirs.sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }))
-  if (mode === 'recent') files.sort((a, b) => (b.mtimeMs ?? 0) - (a.mtimeMs ?? 0))
-  else files.sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }))
-  return [...dirs.map((d) => ({ ...d, children: sortTree(d.children ?? [], mode) })), ...files]
+  const withSortedChildren = nodes.map((n) =>
+    n.type === 'dir' ? { ...n, children: sortTree(n.children ?? [], mode) } : n
+  )
+  if (mode === 'recent') {
+    // newest first — files and folders interleaved, so a just-created/dropped file is on top
+    return withSortedChildren.sort((a, b) => recencyOf(b) - recencyOf(a))
+  }
+  // name mode: folders first, then files, each alphabetical
+  const dirs = withSortedChildren.filter((n) => n.type === 'dir')
+  const files = withSortedChildren.filter((n) => n.type === 'file')
+  const byName = (a: MdNode, b: MdNode): number => a.name.localeCompare(b.name, undefined, { numeric: true })
+  dirs.sort(byName)
+  files.sort(byName)
+  return [...dirs, ...files]
 }
 
 function TreeNodes({
   nodes,
   depth,
   collapsed,
-  toggle
+  toggle,
+  onNew
 }: {
   nodes: MdNode[]
   depth: number
   collapsed: Set<string>
   toggle: (path: string) => void
+  onNew: (dir: string) => void
 }): JSX.Element {
   const activePath = useStore((s) => s.activePath)
   const selectFile = useStore((s) => s.selectFile)
   const selected = useStore((s) => s.selected)
   const toggleSelected = useStore((s) => s.toggleSelected)
+  const selectMany = useStore((s) => s.selectMany)
+  const selectMode = useStore((s) => s.selectMode)
 
   return (
     <>
@@ -65,29 +96,69 @@ function TreeNodes({
         const pad = { paddingLeft: 9 + depth * 12 }
         if (n.type === 'dir') {
           const isCollapsed = collapsed.has(n.path)
+          const descPaths = collectPaths(n)
+          const allSel = descPaths.every((p) => selected.includes(p))
+          const someSel = descPaths.some((p) => selected.includes(p))
+          const toggleDir = (): void => selectMany(descPaths, !allSel)
           return (
             <li key={n.path}>
-              <div className={`group ${isCollapsed ? 'collapsed' : ''}`} style={pad} onClick={() => toggle(n.path)}>
-                <span className="twist">▾</span>
-                {n.name}
+              <div
+                className={`group ${isCollapsed ? 'collapsed' : ''} ${allSel ? 'selected' : ''}`}
+                style={pad}
+                onClick={() => (selectMode ? toggleDir() : toggle(n.path))}
+              >
+                {selectMode && (
+                  <input
+                    type="checkbox"
+                    className="sel-check"
+                    checked={allSel}
+                    ref={(el) => {
+                      if (el) el.indeterminate = someSel && !allSel
+                    }}
+                    onChange={toggleDir}
+                    onClick={(e) => e.stopPropagation()}
+                  />
+                )}
+                <span
+                  className="twist"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    toggle(n.path)
+                  }}
+                >
+                  ▾
+                </span>
+                <span className="group-name">{n.name}</span>
+                {!selectMode && (
+                  <button
+                    className="node-add"
+                    title="New file or folder here"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      onNew(n.path)
+                    }}
+                  >
+                    +
+                  </button>
+                )}
               </div>
               {!isCollapsed && (
                 <ul className="tree">
-                  <TreeNodes nodes={n.children ?? []} depth={depth + 1} collapsed={collapsed} toggle={toggle} />
+                  <TreeNodes nodes={n.children ?? []} depth={depth + 1} collapsed={collapsed} toggle={toggle} onNew={onNew} />
                 </ul>
               )}
             </li>
           )
         }
-        const { isNew, label } = relAge(n.mtimeMs)
+        const fileSel = selected.includes(n.path)
         return (
           <li key={n.path}>
             <div
-              className={`node ${activePath === n.path ? 'active' : ''} ${selected.includes(n.path) ? 'selected' : ''}`}
+              className={`node ${activePath === n.path ? 'active' : ''} ${fileSel ? 'selected' : ''}`}
               style={pad}
-              title={n.relPath}
+              title={n.name}
               onClick={(e) => {
-                if (e.metaKey || e.ctrlKey) {
+                if (selectMode || e.metaKey || e.ctrlKey) {
                   e.preventDefault()
                   toggleSelected(n.path)
                 } else {
@@ -99,9 +170,18 @@ function TreeNodes({
                 window.orchid.fileMenu(n.path)
               }}
             >
+              {selectMode && (
+                <input
+                  type="checkbox"
+                  className="sel-check"
+                  checked={fileSel}
+                  onChange={() => toggleSelected(n.path)}
+                  onClick={(e) => e.stopPropagation()}
+                />
+              )}
               <span className="ic" />
               <span className="name">{n.name}</span>
-              {isNew ? <span className="dot" /> : label ? <span className="ago">{label}</span> : null}
+              <span className="ago">{relTime(n.mtimeMs)}</span>
             </div>
           </li>
         )
@@ -123,13 +203,12 @@ function FolderSection({
   sortMode: SortMode
   collapsed: Set<string>
   toggle: (path: string) => void
-  onNew: (mode: 'file' | 'folder', dir: string) => void
+  onNew: (dir: string) => void
 }): JSX.Element {
   const activePath = useStore((s) => s.activePath)
   const selectFile = useStore((s) => s.selectFile)
   const shown = useMemo(() => sortTree(filterTree(folder.tree, filter), sortMode), [folder.tree, filter, sortMode])
   const isCollapsed = collapsed.has(folder.root)
-  const [menuOpen, setMenuOpen] = useState(false)
 
   // Single opened file: a row with its name + close.
   if (folder.isFile) {
@@ -176,7 +255,7 @@ function FolderSection({
             title="New file or folder"
             onClick={(e) => {
               e.stopPropagation()
-              setMenuOpen((o) => !o)
+              onNew(folder.root)
             }}
           >
             +
@@ -191,35 +270,12 @@ function FolderSection({
           >
             ✕
           </button>
-          {menuOpen && (
-            <>
-              <div className="menu-scrim" onClick={() => setMenuOpen(false)} />
-              <div className="mini-menu">
-                <button
-                  onClick={() => {
-                    setMenuOpen(false)
-                    onNew('file', folder.root)
-                  }}
-                >
-                  New file…
-                </button>
-                <button
-                  onClick={() => {
-                    setMenuOpen(false)
-                    onNew('folder', folder.root)
-                  }}
-                >
-                  New folder…
-                </button>
-              </div>
-            </>
-          )}
         </span>
       </div>
       {!isCollapsed && (
         <ul className="tree">
           {shown.length ? (
-            <TreeNodes nodes={shown} depth={0} collapsed={collapsed} toggle={toggle} />
+            <TreeNodes nodes={shown} depth={0} collapsed={collapsed} toggle={toggle} onNew={onNew} />
           ) : (
             <li className="tree-empty">No files yet</li>
           )}
@@ -239,8 +295,10 @@ export default function Sidebar(): JSX.Element {
   const selectFile = useStore((s) => s.selectFile)
   const selected = useStore((s) => s.selected)
   const clearSelected = useStore((s) => s.clearSelected)
+  const selectMode = useStore((s) => s.selectMode)
+  const setSelectMode = useStore((s) => s.setSelectMode)
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set())
-  const [dialog, setDialog] = useState<{ mode: 'file' | 'folder'; dir: string } | null>(null)
+  const [dialogDir, setDialogDir] = useState<string | null>(null)
 
   const toggle = (path: string): void =>
     setCollapsed((prev) => {
@@ -249,16 +307,17 @@ export default function Sidebar(): JSX.Element {
       return next
     })
 
-  const onNew = (mode: 'file' | 'folder', dir: string): void => setDialog({ mode, dir })
+  const onNew = (dir: string): void => setDialogDir(dir)
 
-  const handleCreate = async (name: string): Promise<void> => {
-    if (!dialog) return
+  const handleCreate = async (name: string, mode: 'file' | 'folder'): Promise<void> => {
+    if (!dialogDir) return
     try {
-      if (dialog.mode === 'file') {
-        const path = await window.orchid.createFile(dialog.dir, name)
+      if (mode === 'file') {
+        const path = await window.orchid.createFile(dialogDir, name)
         await selectFile(path)
+        useStore.getState().setEditMode(true) // new files open ready to type
       } else {
-        await window.orchid.createFolder(dialog.dir, name)
+        await window.orchid.createFolder(dialogDir, name)
       }
     } catch (err) {
       window.alert(err instanceof Error ? err.message : String(err))
@@ -283,30 +342,50 @@ export default function Sidebar(): JSX.Element {
             Recent
           </button>
         </div>
+        <button
+          className="side-refresh"
+          title="New file or folder"
+          aria-label="New"
+          disabled={folders.length === 0}
+          onClick={() => folders[0] && onNew(folders[0].root)}
+        >
+          +
+        </button>
+        <button
+          className={`side-refresh ${selectMode ? 'on' : ''}`}
+          title="Select multiple files to delete"
+          aria-label="Select"
+          onClick={() => setSelectMode(!selectMode)}
+        >
+          ☑
+        </button>
         <button className="side-refresh" title="Refresh (⌘R)" aria-label="Refresh" onClick={() => window.orchid.refresh()}>
           ↻
         </button>
       </div>
 
-      {selected.length > 0 && (
+      {selectMode && (
         <div className="select-bar">
           <span>
-            {selected.length} selected <span className="select-hint">(⌘-click)</span>
+            {selected.length ? `${selected.length} selected` : 'Tick files & folders'}
           </span>
           <span className="select-actions">
             <button
               className="select-trash"
+              disabled={selected.length === 0}
               onClick={async () => {
-                if (window.confirm(`Move ${selected.length} item(s) to Trash?`)) {
-                  await window.orchid.trashMany(selected)
+                // keep only top-level picks (a selected folder covers its children)
+                const roots = selected.filter((p) => !selected.some((q) => q !== p && p.startsWith(q + '/')))
+                if (window.confirm(`Move ${roots.length} item(s) to Trash?`)) {
+                  await window.orchid.trashMany(roots)
                   clearSelected()
                 }
               }}
             >
-              Move to Trash
+              Trash
             </button>
-            <button className="select-clear" onClick={clearSelected}>
-              Clear
+            <button className="select-clear" onClick={() => setSelectMode(false)}>
+              Done
             </button>
           </span>
         </div>
@@ -329,13 +408,7 @@ export default function Sidebar(): JSX.Element {
         </button>
       </div>
 
-      <NameDialog
-        open={!!dialog}
-        title={dialog?.mode === 'folder' ? 'New folder' : 'New file'}
-        placeholder={dialog?.mode === 'folder' ? 'folder-name' : 'filename.md'}
-        onSubmit={handleCreate}
-        onClose={() => setDialog(null)}
-      />
+      <NameDialog open={!!dialogDir} onSubmit={handleCreate} onClose={() => setDialogDir(null)} />
 
       <Resizer side="right" onResize={(x) => setSidebarWidth(x)} />
     </aside>

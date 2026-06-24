@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useMemo, lazy, Suspense } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import remarkMath from 'remark-math'
@@ -9,7 +9,11 @@ import rehypeHighlight from 'rehype-highlight'
 import rehypeSlug from 'rehype-slug'
 import 'katex/dist/katex.min.css'
 import { useStore } from '../store/useStore'
-import Mermaid from './Mermaid'
+
+// Mermaid pulls in a large dependency graph (cytoscape/dagre/etc.). Load it
+// only when a document actually contains a ```mermaid fence so it stays out of
+// the startup bundle.
+const Mermaid = lazy(() => import('./Mermaid'))
 
 // Allow task-list checkboxes, highlight.js / KaTeX / math class names, and heading ids
 // through the sanitizer. (KaTeX & highlight run after sanitize, so their output is trusted.)
@@ -83,7 +87,11 @@ export default function MarkdownView({ source }: { source: string }): JSX.Elemen
           (child as { props?: { className?: string } })?.props?.className ?? ''
         if (/language-mermaid/.test(cls)) {
           const raw = (child as { props?: { children?: React.ReactNode } }).props?.children
-          return <Mermaid code={String(raw)} />
+          return (
+            <Suspense fallback={<pre className="mermaid-loading">Rendering diagram…</pre>}>
+              <Mermaid code={String(raw)} />
+            </Suspense>
+          )
         }
         return <pre>{children}</pre>
       },

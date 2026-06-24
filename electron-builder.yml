@@ -6,6 +6,9 @@ directories:
 files:
   - out/**/*
   - resources/**/*
+# Ship only the English locale — Chromium bundles ~50 .pak locale files we don't use.
+electronLanguages:
+  - en
 mac:
   category: public.app-category.productivity
   icon: resources/icon.icns

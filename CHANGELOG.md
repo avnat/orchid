@@ -2,6 +2,24 @@
 
 All notable changes to **Orchid**. Newest first. Built for macOS (Apple Silicon).
 
+## 1.0.1 — 2026-06-24
+
+**Added**
+- **Current-mode badge** in the title bar — a quiet **Reading** pill that lights up as **Editing**, with a matching accent rule under the bar, so you always know which mode you're in.
+- New files now **open ready to edit** — no extra click to start typing.
+- The **+** (new file / folder) is now available everywhere: at the root, on a workspace folder, and on any subfolder.
+
+**Changed**
+- Selecting a folder now **selects every file inside it** (for multi-delete).
+- **Multi-select is easier to find** — a Select toggle in the sidebar, a right-click "Select", and checkboxes on items.
+- **Move to Trash now asks for confirmation.**
+- Files **always show a relative time** (consistent even beyond two weeks); long names truncate with an ellipsis and reveal the full name on hover.
+- **Recent** sort keeps just-created and just-edited files on top.
+- **Smaller and faster** — Mermaid diagrams and the code editor now load on demand (startup bundle ~4.1 MB → ~2.9 MB), and unused Chromium locales are trimmed (~40 MB off the install).
+
+**Removed**
+- The new-file accent dot (it depended on a constantly-running timer); relative timestamps cover the same need.
+
 ## 1.0.0 — 2026-06-24
 
 First stable release.

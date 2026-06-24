@@ -88,6 +88,11 @@ export default function App(): JSX.Element {
       window.orchid.onExportPdf(() => void doExport('pdf')),
       window.orchid.onShortcuts(() => setShortcutsOpen(true)),
       window.orchid.onDeveloper(() => setDeveloperOpen(true)),
+      window.orchid.onSelectFile((path) => {
+        const st = useStore.getState()
+        st.setSelectMode(true)
+        if (!st.selected.includes(path)) st.toggleSelected(path)
+      }),
       // Save-and-close: main asked us to persist before quitting.
       window.orchid.onSaveAndClose(async () => {
         await useStore.getState().save()
@@ -194,13 +199,21 @@ export default function App(): JSX.Element {
 
   return (
     <div className="app">
-      <div className="titlebar">
+      <div className={`titlebar ${activePath && editMode ? 'editing' : ''}`}>
         <div className="left">
           <button className="tbtn" onClick={() => window.orchid.open()} title="Open a folder or file (⌘O)">
             Open
           </button>
         </div>
-        <div className="title">{title}</div>
+        <div className="title">
+          <span className="title-text">{title}</span>
+          {activePath && (
+            <span className={`mode-badge ${editMode ? 'is-editing' : 'is-reading'}`} aria-live="polite">
+              <span className="mode-dot" aria-hidden="true" />
+              {editMode ? 'Editing' : 'Reading'}
+            </span>
+          )}
+        </div>
         <div className="actions">
           <div className="mode-toggle" role="group" aria-label="View mode">
             <button

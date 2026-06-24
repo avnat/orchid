@@ -461,12 +461,22 @@ ipcMain.handle('fs:trashMany', async (_e, paths: string[]) => {
 ipcMain.handle('fs:fileMenu', (_e, target: string) => {
   if (!withinWorkspace(target)) return
   const menu = Menu.buildFromTemplate([
+    { label: 'Select (for multi-delete)', click: () => mainWindow?.webContents.send('file:select', target) },
     { label: 'Reveal in Finder', click: () => shell.showItemInFolder(target) },
     { type: 'separator' },
     {
       label: 'Move to Trash',
       click: async () => {
-        if (withinWorkspace(target)) await shell.trashItem(target).catch(() => {})
+        if (!withinWorkspace(target) || !mainWindow) return
+        const { response } = await dialog.showMessageBox(mainWindow, {
+          type: 'warning',
+          buttons: ['Cancel', 'Move to Trash'],
+          defaultId: 1,
+          cancelId: 0,
+          message: `Move "${basename(target)}" to Trash?`,
+          detail: 'You can restore it from the Trash later.'
+        })
+        if (response === 1) await shell.trashItem(target).catch(() => {})
       }
     }
   ])

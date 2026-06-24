@@ -38,8 +38,10 @@ interface OrchidState {
   customAccent: string
   /** active file can't be shown as text (binary/unsupported) */
   unsupported: boolean
-  /** multi-selected file paths (for batch delete) */
+  /** multi-selected file/folder paths (for batch delete) */
   selected: string[]
+  /** selection mode shows checkboxes for picking multiple items */
+  selectMode: boolean
   tocVisible: boolean
   sortMode: SortMode
   sidebarWidth: number
@@ -57,6 +59,7 @@ interface OrchidState {
   setContent: (content: string) => void
   save: () => Promise<void>
   toggleEdit: () => void
+  setEditMode: (on: boolean) => void
   toggleFocus: () => void
   toggleToc: () => void
   setSystemDark: (dark: boolean) => void
@@ -64,7 +67,9 @@ interface OrchidState {
   setAccent: (key: string) => void
   setCustomAccent: (hex: string) => void
   toggleSelected: (path: string) => void
+  selectMany: (paths: string[], on: boolean) => void
   clearSelected: () => void
+  setSelectMode: (on: boolean) => void
   setFilter: (q: string) => void
   onExternalChange: (path: string) => void
   resolveConflict: (action: 'mine' | 'theirs') => Promise<void>
@@ -95,6 +100,7 @@ export const useStore = create<OrchidState>((set, get) => ({
   customAccent: lsGet('orchid.customAccent', '#7c4dd6'),
   unsupported: false,
   selected: [],
+  selectMode: false,
   tocVisible: lsGet('orchid.toc', 'true') !== 'false',
   sortMode: lsGet('orchid.sort', 'name') as SortMode,
   sidebarWidth: Math.min(520, Math.max(180, Number(lsGet('orchid.sidebarW', '248')) || 248)),
@@ -166,6 +172,7 @@ export const useStore = create<OrchidState>((set, get) => ({
   },
 
   toggleEdit: () => set((s) => ({ editMode: !s.editMode })),
+  setEditMode: (on) => set({ editMode: on }),
   toggleFocus: () => set((s) => ({ focusMode: !s.focusMode })),
   toggleToc: () =>
     set((s) => {
@@ -191,7 +198,15 @@ export const useStore = create<OrchidState>((set, get) => ({
     set((s) => ({
       selected: s.selected.includes(path) ? s.selected.filter((p) => p !== path) : [...s.selected, path]
     })),
+  selectMany: (paths, on) =>
+    set((s) => {
+      const next = new Set(s.selected)
+      if (on) paths.forEach((p) => next.add(p))
+      else paths.forEach((p) => next.delete(p))
+      return { selected: [...next] }
+    }),
   clearSelected: () => set({ selected: [] }),
+  setSelectMode: (on) => set({ selectMode: on, ...(on ? {} : { selected: [] }) }),
   setFilter: (q) => set({ filter: q }),
 
   onExternalChange: (path) => {

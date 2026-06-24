@@ -72,6 +72,7 @@ const api = {
   onExportPdf: (cb: () => void) => on('cmd:export-pdf', cb),
   onShortcuts: (cb: () => void) => on('cmd:shortcuts', cb),
   onDeveloper: (cb: () => void) => on('cmd:developer', cb),
+  onSelectFile: (cb: (path: string) => void) => on('file:select', cb),
   onFindResult: (cb: (p: { active: number; total: number }) => void) => on('find:result', cb),
   onSaveAndClose: (cb: () => void) => on('app:save-and-close', cb)
 }

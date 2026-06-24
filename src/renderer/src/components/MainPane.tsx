@@ -1,10 +1,13 @@
-import { useEffect, useMemo, useRef } from 'react'
+import { useEffect, useMemo, useRef, lazy, Suspense } from 'react'
 import { useStore } from '../store/useStore'
 import MarkdownView from '../markdown/MarkdownView'
 import ConflictBanner from './ConflictBanner'
 import Toc from './Toc'
-import Editor from './Editor'
 import { isMarkdownFile, langForFile } from '../markdown/langs'
+
+// CodeMirror + its language packages are sizeable; load the editor lazily so it
+// stays out of the startup bundle until the user actually edits or opens code.
+const Editor = lazy(() => import('./Editor'))
 
 export default function MainPane(): JSX.Element {
   const activePath = useStore((s) => s.activePath)
@@ -70,7 +73,9 @@ export default function MainPane(): JSX.Element {
       <div className="main">
         {conflict && <ConflictBanner />}
         <div className="codeview">
-          <Editor dark={dark} language={codeLang} readOnly={!editMode} showLineNumbers />
+          <Suspense fallback={<div className="editor-loading" />}>
+            <Editor dark={dark} language={codeLang} readOnly={!editMode} showLineNumbers />
+          </Suspense>
         </div>
       </div>
     )
@@ -82,7 +87,9 @@ export default function MainPane(): JSX.Element {
       {editMode ? (
         <div className="split">
           <div className="pane editor-pane">
-            <Editor dark={dark} onScrollFraction={syncPreview} />
+            <Suspense fallback={<div className="editor-loading" />}>
+              <Editor dark={dark} onScrollFraction={syncPreview} />
+            </Suspense>
           </div>
           <div className="pane" ref={splitPreviewRef}>
             <MarkdownView source={content} />

@@ -90,9 +90,19 @@ export default function ThemePicker(): JSX.Element {
                 <span className="swatch-name">{a.name}</span>
               </button>
             ))}
-            <label className={accentKey === 'custom' ? 'swatch on' : 'swatch'} title="Pick your own color">
+            <button
+              className={accentKey === 'custom' ? 'swatch on' : 'swatch'}
+              title="Use your custom colour"
+              onClick={() => setAccent('custom')}
+            >
               <span className="ring custom-ring" style={{ background: customAccent }} />
               <span className="swatch-name">Custom</span>
+            </button>
+          </div>
+
+          <div className="custom-row">
+            <label className="custom-well" title="Pick your colour">
+              <span className="ring" style={{ background: customAccent }} />
               <input
                 type="color"
                 className="custom-color-input"
@@ -100,6 +110,8 @@ export default function ThemePicker(): JSX.Element {
                 onChange={(e) => setCustomAccent(e.target.value)}
               />
             </label>
+            <span className="custom-hex">{customAccent.toUpperCase()}</span>
+            <span className="custom-cap">Pick your colour</span>
           </div>
 
           <div className="pop-label">Sidebar text size</div>

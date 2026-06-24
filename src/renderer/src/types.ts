@@ -51,6 +51,7 @@ export interface OrchidApi {
   onExportPdf: (cb: () => void) => () => void
   onShortcuts: (cb: () => void) => () => void
   onDeveloper: (cb: () => void) => () => void
+  onSelectFile: (cb: (path: string) => void) => () => void
   onFindResult: (cb: (p: { active: number; total: number }) => void) => () => void
   onSaveAndClose: (cb: () => void) => () => void
 }

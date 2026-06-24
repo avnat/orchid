@@ -21,14 +21,98 @@
   grid-column: 2;
   font-size: 12.5px;
   color: var(--muted);
+  max-width: 56ch;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+}
+/* Title text ellipsizes; the badge beside it never collapses. */
+.titlebar .title-text {
+  min-width: 0;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  max-width: 46ch;
 }
 .titlebar .title b {
   color: var(--text);
   font-weight: 600;
+}
+
+/* Ambient cue: a thin accent rule under the bar while editing. */
+.titlebar.editing {
+  border-bottom-color: color-mix(in srgb, var(--accent) 55%, var(--line));
+  box-shadow: inset 0 -2px 0 color-mix(in srgb, var(--accent) 60%, transparent);
+}
+
+/* Current-mode badge beside the title — quiet while reading, lit while editing. */
+.mode-badge {
+  flex: none;
+  align-self: center;
+  box-sizing: border-box;
+  height: 20px;
+  line-height: 1;
+  white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 0 9px 0 7px;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  transition: color 0.18s ease, background 0.18s ease, border-color 0.18s ease;
+}
+.mode-badge .mode-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+}
+.mode-badge.is-reading {
+  color: color-mix(in srgb, var(--text) 70%, var(--muted));
+  background: var(--surface-2);
+  border-color: color-mix(in srgb, var(--text) 22%, var(--line));
+}
+.mode-badge.is-reading .mode-dot {
+  background: color-mix(in srgb, var(--text) 55%, var(--muted));
+}
+.mode-badge.is-editing {
+  color: var(--accent);
+  background: var(--accent-soft);
+  border-color: color-mix(in srgb, var(--accent) 40%, transparent);
+}
+.mode-badge.is-editing .mode-dot {
+  box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 60%, transparent);
+  animation: mode-pulse 2.2s ease-out infinite;
+}
+@keyframes mode-pulse {
+  0% {
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 55%, transparent);
+  }
+  70%,
+  100% {
+    box-shadow: 0 0 0 5px transparent;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .mode-badge.is-editing .mode-dot {
+    animation: none;
+  }
+}
+
+/* Lazy-chunk loading placeholders (Mermaid / CodeMirror editor). */
+.editor-loading {
+  height: 100%;
+  background: var(--surface);
+}
+.mermaid-loading {
+  color: var(--muted);
+  font-style: italic;
+  background: var(--surface-2);
 }
 .titlebar .left {
   grid-column: 1;
@@ -200,14 +284,48 @@
     0 0 0 4px var(--line),
     inset 0 0 0 1px rgba(255, 255, 255, 0.4);
 }
+.swatch {
+  position: relative;
+}
+
+/* dedicated colour picker row (separate from selecting the Custom swatch) */
+.custom-row {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin-top: 10px;
+  padding: 8px 6px 2px;
+}
+.custom-well {
+  position: relative;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  cursor: pointer;
+  flex: none;
+}
+.custom-well .ring {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  display: block;
+  box-shadow: 0 0 0 1px var(--line);
+}
 .custom-color-input {
   position: absolute;
   inset: 0;
   opacity: 0;
   cursor: pointer;
 }
-.swatch {
-  position: relative;
+.custom-hex {
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--text);
+}
+.custom-cap {
+  font-size: 11.5px;
+  color: var(--muted);
+  margin-left: auto;
 }
 .swatch.on .swatch-name {
   color: var(--text);
@@ -296,6 +414,26 @@
 .side-refresh:hover {
   color: var(--accent);
   border-color: color-mix(in srgb, var(--accent) 45%, transparent);
+}
+.side-refresh.on {
+  color: var(--accent);
+  border-color: color-mix(in srgb, var(--accent) 50%, transparent);
+  background: var(--accent-soft);
+}
+.sel-check {
+  flex: none;
+  margin-right: 2px;
+  width: 14px;
+  height: 14px;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+.select-trash:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+.select-trash:disabled:hover {
+  background: transparent;
 }
 .side-scroll {
   flex: 1;
@@ -524,6 +662,33 @@
 .tree .group.collapsed .twist {
   transform: rotate(-90deg);
 }
+.tree .group .group-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.node-add {
+  flex: none;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 1;
+  padding: 0 4px;
+  border-radius: 5px;
+  opacity: 0;
+}
+.tree .group:hover .node-add {
+  opacity: 0.85;
+}
+.node-add:hover {
+  color: var(--accent);
+  background: var(--surface-2);
+  opacity: 1;
+}
 .node {
   display: flex;
   align-items: center;
@@ -551,8 +716,11 @@
   mask: var(--file-icon) center / contain no-repeat;
 }
 .node .name {
+  flex: 1;
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .node.active {
   background: var(--sel);
@@ -627,9 +795,13 @@
   flex: none;
 }
 .node .ago {
+  flex: none;
   margin-left: auto;
+  padding-left: 6px;
   font-size: calc(var(--side-font, 14.5px) - 3.5px);
   color: var(--muted);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
 
 :root {
