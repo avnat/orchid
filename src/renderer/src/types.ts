@@ -34,6 +34,7 @@ export interface OrchidApi {
   reveal: (path: string) => Promise<void>
   openExternal: (url: string) => Promise<void>
   checkUpdates: () => Promise<void>
+  newFile: () => Promise<void>
   getTheme: () => Promise<{ shouldUseDarkColors: boolean }>
   search: (query: string) => Promise<SearchHit[]>
   exportHtml: (html: string, defaultName: string) => Promise<boolean>
@@ -57,6 +58,8 @@ export interface OrchidApi {
   onSearch: (cb: () => void) => () => void
   onNewFile: (cb: () => void) => () => void
   onNewFolder: (cb: () => void) => () => void
+  onCloseFile: (cb: () => void) => () => void
+  onNewFileCreated: (cb: () => void) => () => void
   onExportHtml: (cb: () => void) => () => void
   onExportPdf: (cb: () => void) => () => void
   onShortcuts: (cb: () => void) => () => void

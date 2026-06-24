@@ -130,6 +130,13 @@ function ancestorDirs(path: string, folders: WorkspaceFolder[]): string[] {
   return dirs
 }
 
+/** Workspace-relative label for a directory, e.g. "sample/specs" — shown in the create dialog. */
+function locationLabel(dir: string, folders: WorkspaceFolder[]): string {
+  const f = folders.find((w) => dir === w.root || dir.startsWith(w.root + '/'))
+  if (!f) return dir
+  return dir === f.root ? f.name : `${f.name}/${dir.slice(f.root.length + 1)}`
+}
+
 /** A short parent-folder hint for a pinned file (empty when it sits at a folder root). */
 function parentHint(path: string, folders: WorkspaceFolder[]): string {
   const folder = folders.find((f) => path.startsWith(f.root + '/'))
@@ -682,13 +689,16 @@ export default function Sidebar(): JSX.Element {
     }
   }, [setRenaming, togglePin])
 
-  // New File / New Folder from the File menu — open the create dialog at the first folder.
+  // New File / New Folder from the File menu — create next to the open file when
+  // there is one, otherwise at the first workspace folder.
   useEffect(() => {
     const openCreate = (mode: 'file' | 'folder') => (): void => {
-      const root = useStore.getState().folders[0]?.root
-      if (!root) return
+      const st = useStore.getState()
+      const active = st.activePath
+      const dir = active ? active.slice(0, active.lastIndexOf('/')) : st.folders[0]?.root
+      if (!dir) return
       setDialogMode(mode)
-      setDialogDir(root)
+      setDialogDir(dir)
     }
     const offFile = window.orchid.onNewFile(openCreate('file'))
     const offFolder = window.orchid.onNewFolder(openCreate('folder'))
@@ -822,6 +832,7 @@ export default function Sidebar(): JSX.Element {
       <NameDialog
         open={!!dialogDir}
         initialMode={dialogMode}
+        location={dialogDir ? locationLabel(dialogDir, folders) : undefined}
         onSubmit={handleCreate}
         onClose={() => setDialogDir(null)}
       />

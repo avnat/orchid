@@ -107,6 +107,16 @@ export default function App(): JSX.Element {
       }),
       window.orchid.onExportHtml(() => void doExport('html')),
       window.orchid.onExportPdf(() => setPdfOpen(true)),
+      // ⌘W — close the open file (a single-file workspace closes entirely → launch).
+      window.orchid.onCloseFile(() => {
+        const st = s()
+        const ap = st.activePath
+        if (!ap) return
+        if (st.content !== st.savedContent && !window.confirm('Discard unsaved changes and close this file?')) return
+        const folder = st.folders.find((f) => ap === f.root || ap.startsWith(f.root + '/'))
+        if (folder?.isFile) void window.orchid.closeFolder(folder.root)
+        else useStore.setState({ activePath: null, content: '', savedContent: '', editMode: false, conflict: false })
+      }),
       window.orchid.onShortcuts(() => setShortcutsOpen(true)),
       window.orchid.onDeveloper(() => setDeveloperOpen(true)),
       window.orchid.onSelectFile((path) => {
@@ -114,6 +124,8 @@ export default function App(): JSX.Element {
         st.setSelectMode(true)
         if (!st.selected.includes(path)) st.toggleSelected(path)
       }),
+      // A brand-new file (created with no folder open) opens ready to type.
+      window.orchid.onNewFileCreated(() => s().setEditMode(true)),
       // Save-and-close: main asked us to persist before quitting.
       window.orchid.onSaveAndClose(async () => {
         await useStore.getState().save()

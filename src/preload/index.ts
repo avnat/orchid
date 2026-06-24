@@ -46,6 +46,7 @@ const api = {
   reveal: (path: string): Promise<void> => ipcRenderer.invoke('fs:reveal', path),
   openExternal: (url: string): Promise<void> => ipcRenderer.invoke('shell:openExternal', url),
   checkUpdates: (): Promise<void> => ipcRenderer.invoke('update:check'),
+  newFile: (): Promise<void> => ipcRenderer.invoke('app:new-file'),
   getTheme: (): Promise<{ shouldUseDarkColors: boolean }> => ipcRenderer.invoke('theme:get'),
   search: (
     query: string
@@ -78,6 +79,8 @@ const api = {
   onSearch: (cb: () => void) => on('cmd:search', cb),
   onNewFile: (cb: () => void) => on('cmd:new-file', cb),
   onNewFolder: (cb: () => void) => on('cmd:new-folder', cb),
+  onCloseFile: (cb: () => void) => on('cmd:close-file', cb),
+  onNewFileCreated: (cb: () => void) => on('cmd:new-file-created', cb),
   onExportHtml: (cb: () => void) => on('cmd:export-html', cb),
   onExportPdf: (cb: () => void) => on('cmd:export-pdf', cb),
   onShortcuts: (cb: () => void) => on('cmd:shortcuts', cb),

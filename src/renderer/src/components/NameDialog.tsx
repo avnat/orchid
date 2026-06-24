@@ -4,11 +4,13 @@ import { useEffect, useRef, useState } from 'react'
 export default function NameDialog({
   open,
   initialMode = 'file',
+  location,
   onSubmit,
   onClose
 }: {
   open: boolean
   initialMode?: 'file' | 'folder'
+  location?: string
   onSubmit: (name: string, mode: 'file' | 'folder') => void
   onClose: () => void
 }): JSX.Element | null {
@@ -38,6 +40,11 @@ export default function NameDialog({
     <div className="cmd-overlay" onMouseDown={onClose}>
       <div className="name-dialog" onMouseDown={(e) => e.stopPropagation()} role="dialog" aria-label="Create">
         <div className="name-title">Create new</div>
+        {location && (
+          <div className="name-loc">
+            in <span className="name-loc-path">{location}</span>
+          </div>
+        )}
         <div className="segment" style={{ marginBottom: 12 }}>
           <button className={mode === 'file' ? 'seg on' : 'seg'} onClick={() => setMode('file')}>
             File

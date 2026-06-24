@@ -99,6 +99,26 @@ async function rescanFolder(changedPath: string): Promise<void> {
   emitWorkspace()
 }
 
+/**
+ * Re-scan the workspace that contains `target` so a just-created file/folder
+ * shows immediately — independent of the file watcher. If `target` lives in a
+ * single-file workspace, promote it to a full folder view so siblings appear.
+ */
+async function revealCreated(target: string): Promise<void> {
+  const t = resolve(target)
+  const f = workspace.find((w) => {
+    const r = resolve(w.root)
+    return t === r || t.startsWith(r + sep)
+  })
+  if (!f) return
+  if (f.isFile) {
+    f.isFile = false
+    f.name = basename(f.root)
+  }
+  f.tree = await scanFolder(f.root)
+  emitWorkspace()
+}
+
 async function refreshAll(): Promise<void> {
   for (const f of workspace) {
     if (!f.isFile) f.tree = await scanFolder(f.root)
@@ -135,6 +155,50 @@ async function openDialog(): Promise<void> {
   const stat = await fs.stat(p).catch(() => null)
   if (stat?.isDirectory()) await openFolder(p, false)
   else if (stat?.isFile()) await openFile(p) // read-time guardrail handles binary/unsupported
+}
+
+/**
+ * New File. With a workspace open, the renderer's in-place create dialog handles
+ * it. With nothing open, ask where to save (Save As), create it, and open it.
+ */
+async function newFileFlow(): Promise<void> {
+  if (workspace.length > 0) {
+    mainWindow?.webContents.send('cmd:new-file')
+    return
+  }
+  if (!mainWindow) return
+  const { canceled, filePath } = await dialog.showSaveDialog(mainWindow, {
+    title: 'New File',
+    message: 'Choose where to create the file',
+    buttonLabel: 'Create',
+    nameFieldLabel: 'Name:',
+    defaultPath: join(app.getPath('documents'), 'untitled.md')
+  })
+  if (canceled || !filePath) return
+  if (!(await fs.stat(filePath).then(() => true).catch(() => false))) {
+    await fs.writeFile(filePath, '', 'utf8').catch(() => {})
+  }
+  await openFile(filePath) // selects it via emitWorkspace
+  mainWindow.webContents.send('cmd:new-file-created') // renderer opens it in edit mode
+}
+
+/** New Folder with nothing open: pick a location, create it, open it as the workspace. */
+async function newFolderFlow(): Promise<void> {
+  if (workspace.length > 0) {
+    mainWindow?.webContents.send('cmd:new-folder')
+    return
+  }
+  if (!mainWindow) return
+  const { canceled, filePath } = await dialog.showSaveDialog(mainWindow, {
+    title: 'New Folder',
+    message: 'Choose where to create the folder',
+    buttonLabel: 'Create',
+    nameFieldLabel: 'Name:',
+    defaultPath: join(app.getPath('documents'), 'New Folder')
+  })
+  if (canceled || !filePath) return
+  await fs.mkdir(filePath, { recursive: true }).catch(() => {})
+  await openFolder(filePath, false)
 }
 
 function createWindow(): void {
@@ -320,12 +384,13 @@ function buildMenu(): void {
     {
       label: 'File',
       submenu: [
-        { label: 'New File…', accelerator: 'CmdOrCtrl+N', click: () => mainWindow?.webContents.send('cmd:new-file') },
-        { label: 'New Folder…', accelerator: 'CmdOrCtrl+Shift+N', click: () => mainWindow?.webContents.send('cmd:new-folder') },
+        { label: 'New File…', accelerator: 'CmdOrCtrl+N', click: () => void newFileFlow() },
+        { label: 'New Folder…', accelerator: 'CmdOrCtrl+Shift+N', click: () => void newFolderFlow() },
         { type: 'separator' },
         { label: 'Open…', accelerator: 'CmdOrCtrl+O', click: () => openDialog() },
         { label: 'Add Folder to Workspace…', accelerator: 'CmdOrCtrl+Shift+O', click: () => openFolderDialog(true) },
         { type: 'separator' },
+        { label: 'Close File', accelerator: 'CmdOrCtrl+W', click: () => mainWindow?.webContents.send('cmd:close-file') },
         { label: 'Refresh', accelerator: 'CmdOrCtrl+R', click: () => void refreshAll() },
         { type: 'separator' },
         { label: 'Toggle Edit Mode', accelerator: 'CmdOrCtrl+E', click: () => mainWindow?.webContents.send('cmd:toggle-edit') },
@@ -351,7 +416,10 @@ function buildMenu(): void {
         ...(isDev ? [{ role: 'toggleDevTools' } as Electron.MenuItemConstructorOptions] : [])
       ]
     },
-    { role: 'windowMenu' },
+    {
+      label: 'Window',
+      submenu: [{ role: 'minimize' }, { role: 'zoom' }, { role: 'front' }]
+    },
     {
       role: 'help',
       submenu: [
@@ -538,6 +606,7 @@ ipcMain.handle('fs:createFile', async (_e, dir: string, name: string) => {
   }
   await fs.mkdir(dirname(target), { recursive: true })
   await fs.writeFile(target, '', 'utf8')
+  await revealCreated(target) // show it in the sidebar right away
   return target
 })
 
@@ -545,6 +614,7 @@ ipcMain.handle('fs:createFolder', async (_e, parentDir: string, name: string) =>
   const target = join(parentDir, name)
   if (!withinWorkspace(target)) throw new Error('Path outside the workspace')
   await fs.mkdir(target, { recursive: true })
+  await revealCreated(target)
   return target
 })
 
@@ -656,6 +726,8 @@ ipcMain.handle('shell:openExternal', async (_e, url: string) => {
 })
 
 ipcMain.handle('update:check', async () => checkForUpdates(true))
+
+ipcMain.handle('app:new-file', async () => newFileFlow())
 
 ipcMain.handle('theme:get', async () => ({ shouldUseDarkColors: nativeTheme.shouldUseDarkColors }))
 

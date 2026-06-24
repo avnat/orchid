@@ -2,6 +2,16 @@
 
 All notable changes to **Orchid**. Newest first. Built for macOS (Apple Silicon).
 
+## 1.1.1 — 2026-06-24
+
+**Fixed**
+- **New files now appear in the sidebar immediately.** Creating a file (or folder) refreshes the containing folder right away instead of waiting on the file watcher — and if you'd opened a single file, the sidebar promotes to its folder view so the new file and its siblings show.
+- **Create a file with nothing open.** New File / New Folder (`⌘N` / `⌘⇧N`, or the launch screen) now offer a **Save As** dialog to pick a location when no folder is open — previously a dead end.
+
+**Added**
+- **Close File (`⌘W`)** — closes the open file (a single-file window returns to the launch screen); prompts if there are unsaved edits.
+- The create dialog now shows **where** the file will be created, and `⌘N` targets the folder of the file you're viewing.
+
 ## 1.1.0 — 2026-06-24
 
 **Added**

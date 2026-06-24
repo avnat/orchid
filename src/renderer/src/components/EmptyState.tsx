@@ -9,11 +9,16 @@ export default function EmptyState(): JSX.Element {
         <p className="tagline">A calm, native reader for the Markdown your tools generate.</p>
       </div>
 
-      <button className="cta" onClick={() => window.orchid.open()}>
-        Open a folder or file
-      </button>
+      <div className="empty-actions">
+        <button className="cta" onClick={() => window.orchid.open()}>
+          Open a folder or file
+        </button>
+        <button className="cta ghost" onClick={() => window.orchid.newFile()}>
+          New file
+        </button>
+      </div>
       <p className="hint">
-        or drop a folder or file anywhere · <kbd>⌘O</kbd>
+        or drop a folder or file anywhere · <kbd>⌘O</kbd> open · <kbd>⌘N</kbd> new
       </p>
 
       <div className="byline">
