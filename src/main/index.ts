@@ -4,6 +4,7 @@ import { promises as fs } from 'fs'
 import { pathToFileURL } from 'url'
 import { scanFolder, TEXT_EXTENSIONS, type MdNode } from './fs-scan'
 import { watchPaths, stopWatching } from './watcher'
+import { cmpVersions } from './version'
 
 const TEXT_RE = new RegExp('\\.(' + TEXT_EXTENSIONS.map((e) => e.slice(1)).join('|') + ')$', 'i')
 
@@ -315,16 +316,6 @@ function createWindow(): void {
 
 // ---- Update check (GitHub Releases) ----
 const UPDATE_REPO = 'avnat/orchid'
-
-/** Compare semver-ish tags; >0 when a is newer than b. */
-function cmpVersions(a: string, b: string): number {
-  const pa = a.replace(/^v/, '').split('.').map((n) => parseInt(n, 10) || 0)
-  const pb = b.replace(/^v/, '').split('.').map((n) => parseInt(n, 10) || 0)
-  for (let i = 0; i < 3; i++) {
-    if ((pa[i] || 0) !== (pb[i] || 0)) return (pa[i] || 0) - (pb[i] || 0)
-  }
-  return 0
-}
 
 interface ReleaseInfo {
   version: string

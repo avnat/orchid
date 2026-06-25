@@ -15,7 +15,8 @@ export function isMarkdownFile(name: string): boolean {
 
 /** CodeMirror language extension for a filename, or null for plain text. */
 export function langForFile(name: string): Extension | null {
-  const ext = name.toLowerCase().split('.').pop() ?? ''
+  const parts = name.toLowerCase().split('.')
+  const ext = parts[parts.length - 1]
   switch (ext) {
     case 'md':
     case 'markdown':
