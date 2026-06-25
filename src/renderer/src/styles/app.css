@@ -1651,6 +1651,117 @@
   padding: 2px 6px;
 }
 
+/* ---------- Settings panel (remappable shortcuts) ---------- */
+.settings {
+  width: min(560px, 92vw);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  box-shadow: var(--shadow);
+  padding: 20px 22px 22px;
+  max-height: 82vh;
+  overflow-y: auto;
+}
+.settings-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-family: var(--serif);
+  font-size: 19px;
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: 8px;
+}
+.settings-note {
+  font-size: 12px;
+  color: var(--muted);
+  line-height: 1.55;
+  margin: 0 0 14px;
+}
+.settings-note kbd {
+  font-family: var(--mono);
+  font-size: 10.5px;
+  color: var(--muted);
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  padding: 1px 5px;
+  margin: 0 1px;
+}
+.settings-error {
+  font-size: 12px;
+  color: #d6447e;
+  background: color-mix(in srgb, #d6447e 12%, transparent);
+  border-radius: 8px;
+  padding: 7px 10px;
+  margin-bottom: 12px;
+}
+.settings-list {
+  display: flex;
+  flex-direction: column;
+}
+.settings-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 7px 0;
+  border-bottom: 1px solid var(--line);
+}
+.settings-row:last-child {
+  border-bottom: 0;
+}
+.settings-label {
+  font-size: 13.5px;
+  color: var(--text);
+}
+.settings-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: none;
+}
+.settings-conflict {
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #d6447e;
+}
+.settings-reset {
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  font-size: 14px;
+  cursor: pointer;
+  padding: 2px 4px;
+  border-radius: 6px;
+  line-height: 1;
+}
+.settings-reset:hover {
+  color: var(--text);
+  background: var(--surface-2);
+}
+.settings-key {
+  font-family: var(--mono);
+  font-size: 12px;
+  min-width: 64px;
+  text-align: center;
+  color: var(--text);
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  padding: 4px 10px;
+  cursor: pointer;
+}
+.settings-key:hover {
+  border-color: var(--accent);
+}
+.settings-key.recording {
+  color: var(--accent);
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+}
+
 /* ---------- Developer / Contributing panel ---------- */
 .dev-panel {
   width: min(620px, 92vw);

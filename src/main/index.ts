@@ -5,6 +5,7 @@ import { pathToFileURL } from 'url'
 import { scanFolder, TEXT_EXTENSIONS, type MdNode } from './fs-scan'
 import { watchPaths, stopWatching } from './watcher'
 import { cmpVersions } from './version'
+import { SHORTCUT_DEFS, mergeShortcuts, sanitizeOverrides, isValidAccelerator } from './shortcuts'
 
 const TEXT_RE = new RegExp('\\.(' + TEXT_EXTENSIONS.map((e) => e.slice(1)).join('|') + ')$', 'i')
 
@@ -266,6 +267,28 @@ function createWindow(): void {
     return { action: 'deny' }
   })
 
+  // Right-click menu for editable fields / selected text (Electron has none by
+  // default). Items are contextual: paste only in editable fields, copy/cut only
+  // with a selection.
+  mainWindow.webContents.on('context-menu', (_e, params) => {
+    const { editFlags, isEditable, selectionText } = params
+    const hasSelection = selectionText.trim().length > 0
+    const items: Electron.MenuItemConstructorOptions[] = []
+    if (isEditable) {
+      items.push(
+        { role: 'cut', enabled: editFlags.canCut },
+        { role: 'copy', enabled: editFlags.canCopy },
+        { role: 'paste', enabled: editFlags.canPaste },
+        { type: 'separator' },
+        { role: 'selectAll' }
+      )
+    } else if (hasSelection) {
+      items.push({ role: 'copy' }, { type: 'separator' }, { role: 'selectAll' })
+    }
+    if (items.length === 0) return
+    Menu.buildFromTemplate(items).popup({ window: mainWindow ?? undefined })
+  })
+
   // Guard against losing unsaved edits when the window/app closes.
   mainWindow.on('close', (e) => {
     if (!unsavedChanges || forceClose || !mainWindow) return
@@ -379,6 +402,49 @@ async function checkForUpdates(manual: boolean): Promise<void> {
   }
 }
 
+// ---- Customisable keyboard shortcuts ----
+let shortcutOverrides: Record<string, string> = {}
+
+function shortcutsFile(): string {
+  return join(app.getPath('userData'), 'shortcuts.json')
+}
+
+async function loadShortcutOverrides(): Promise<void> {
+  try {
+    shortcutOverrides = sanitizeOverrides(JSON.parse(await fs.readFile(shortcutsFile(), 'utf8')))
+  } catch {
+    shortcutOverrides = {}
+  }
+}
+
+async function saveShortcutOverrides(): Promise<void> {
+  try {
+    await fs.writeFile(shortcutsFile(), JSON.stringify(shortcutOverrides, null, 2), 'utf8')
+  } catch {
+    /* best-effort */
+  }
+}
+
+/** Resolved accelerator for a command id (override if valid, else default). */
+function accel(id: string): string {
+  return mergeShortcuts(shortcutOverrides)[id]
+}
+
+function resolvedShortcuts(): { defs: typeof SHORTCUT_DEFS; map: Record<string, string> } {
+  return { defs: SHORTCUT_DEFS, map: mergeShortcuts(shortcutOverrides) }
+}
+
+/** Rebuild the application menu; on any failure (e.g. a bad accelerator) reset to defaults. */
+function safeBuildMenu(): void {
+  try {
+    buildMenu()
+  } catch {
+    shortcutOverrides = {}
+    void saveShortcutOverrides()
+    buildMenu()
+  }
+}
+
 function buildMenu(): void {
   const template: Electron.MenuItemConstructorOptions[] = [
     {
@@ -386,6 +452,8 @@ function buildMenu(): void {
       submenu: [
         { role: 'about' },
         { label: 'Check for Updates…', click: () => void checkForUpdates(true) },
+        { type: 'separator' },
+        { label: 'Settings…', accelerator: 'CmdOrCtrl+,', click: () => sendToUi('cmd:settings') },
         { type: 'separator' },
         { role: 'hide' },
         { role: 'hideOthers' },
@@ -397,29 +465,48 @@ function buildMenu(): void {
     {
       label: 'File',
       submenu: [
-        { label: 'New File…', accelerator: 'CmdOrCtrl+N', click: () => void newFileFlow() },
-        { label: 'New Folder…', accelerator: 'CmdOrCtrl+Shift+N', click: () => void newFolderFlow() },
+        { label: 'New File…', accelerator: accel('newFile'), click: () => void newFileFlow() },
+        { label: 'New Folder…', accelerator: accel('newFolder'), click: () => void newFolderFlow() },
         { type: 'separator' },
-        { label: 'Open…', accelerator: 'CmdOrCtrl+O', click: () => openDialog() },
-        { label: 'Add Folder to Workspace…', accelerator: 'CmdOrCtrl+Shift+O', click: () => openFolderDialog(true) },
+        { label: 'Open…', accelerator: accel('open'), click: () => openDialog() },
+        { label: 'Add Folder to Workspace…', accelerator: accel('addFolder'), click: () => openFolderDialog(true) },
         { type: 'separator' },
-        { label: 'Close File', accelerator: 'CmdOrCtrl+W', click: () => sendToUi('cmd:close-file') },
-        { label: 'Refresh', accelerator: 'CmdOrCtrl+R', click: () => void refreshAll() },
+        { label: 'Jump to File…', accelerator: accel('commandPalette'), click: () => sendToUi('cmd:command-palette') },
+        { label: 'Close File', accelerator: accel('closeFile'), click: () => sendToUi('cmd:close-file') },
+        { label: 'Refresh', accelerator: accel('refresh'), click: () => void refreshAll() },
         { type: 'separator' },
-        { label: 'Toggle Edit Mode', accelerator: 'CmdOrCtrl+E', click: () => sendToUi('cmd:toggle-edit') },
-        { label: 'Save', accelerator: 'CmdOrCtrl+S', click: () => sendToUi('cmd:save') },
+        { label: 'Toggle Edit Mode', accelerator: accel('toggleEdit'), click: () => sendToUi('cmd:toggle-edit') },
+        { label: 'Save', accelerator: accel('save'), click: () => sendToUi('cmd:save') },
         { type: 'separator' },
-        { label: 'Find in Files…', accelerator: 'CmdOrCtrl+Shift+F', click: () => sendToUi('cmd:search') },
+        { label: 'Find in Files…', accelerator: accel('searchAll'), click: () => sendToUi('cmd:search') },
         { type: 'separator' },
         { label: 'Export as HTML…', click: () => sendToUi('cmd:export-html') },
         { label: 'Export as PDF…', click: () => sendToUi('cmd:export-pdf') }
       ]
     },
     {
+      label: 'Edit',
+      submenu: [
+        // Undo/redo route to CodeMirror — Electron's native execCommand undo
+        // doesn't drive CodeMirror 6's own history.
+        { label: 'Undo', accelerator: accel('undo'), click: () => sendToUi('cmd:edit-undo') },
+        { label: 'Redo', accelerator: accel('redo'), click: () => sendToUi('cmd:edit-redo') },
+        { type: 'separator' },
+        // Native clipboard roles act on the focused editable element (incl. the editor).
+        { role: 'cut' },
+        { role: 'copy' },
+        { role: 'paste' },
+        { role: 'pasteAndMatchStyle' },
+        { role: 'delete' },
+        { type: 'separator' },
+        { role: 'selectAll' }
+      ]
+    },
+    {
       label: 'View',
       submenu: [
-        { label: 'Toggle Sidebar', accelerator: 'CmdOrCtrl+.', click: () => sendToUi('cmd:focus-mode') },
-        { label: 'Toggle Table of Contents', accelerator: 'CmdOrCtrl+Alt+.', click: () => sendToUi('cmd:toggle-toc') },
+        { label: 'Toggle Sidebar', accelerator: accel('toggleSidebar'), click: () => sendToUi('cmd:focus-mode') },
+        { label: 'Toggle Table of Contents', accelerator: accel('toggleToc'), click: () => sendToUi('cmd:toggle-toc') },
         { type: 'separator' },
         { role: 'resetZoom' },
         { role: 'zoomIn' },
@@ -436,7 +523,7 @@ function buildMenu(): void {
     {
       role: 'help',
       submenu: [
-        { label: 'Keyboard Shortcuts', accelerator: 'CmdOrCtrl+/', click: () => sendToUi('cmd:shortcuts') },
+        { label: 'Keyboard Shortcuts', accelerator: accel('shortcuts'), click: () => sendToUi('cmd:shortcuts') },
         { label: 'Contributing & Developer Info', click: () => sendToUi('cmd:developer') },
         { type: 'separator' },
         { label: 'View Project on GitHub', click: () => shell.openExternal('https://github.com/avnat/orchid') },
@@ -458,7 +545,8 @@ function buildMenu(): void {
   Menu.setApplicationMenu(Menu.buildFromTemplate(template))
 }
 
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
+  await loadShortcutOverrides()
   protocol.handle('orchid-asset', (request) => {
     const url = new URL(request.url)
     const filePath = decodeURIComponent(url.pathname.replace(/^\//, ''))
@@ -479,7 +567,7 @@ app.whenReady().then(() => {
     }
   }
 
-  buildMenu()
+  safeBuildMenu()
   createWindow()
 
   // One quiet update check shortly after launch (the renderer ignores it if the
@@ -780,6 +868,35 @@ ipcMain.handle('update:check', async () => checkForUpdates(true))
 ipcMain.handle('app:new-file', async () => newFileFlow())
 
 ipcMain.handle('theme:get', async () => ({ shouldUseDarkColors: nativeTheme.shouldUseDarkColors }))
+
+// ---- Shortcuts IPC ----
+ipcMain.handle('shortcuts:get', async () => resolvedShortcuts())
+
+ipcMain.handle('shortcuts:set', async (_e, id: string, accelerator: string | null) => {
+  const def = SHORTCUT_DEFS.find((d) => d.id === id)
+  if (!def) return { ok: false, error: 'Unknown command' }
+  if (accelerator === null || accelerator === def.defaultAccelerator) {
+    delete shortcutOverrides[id] // back to default
+  } else if (isValidAccelerator(accelerator)) {
+    shortcutOverrides[id] = accelerator
+  } else {
+    return { ok: false, error: 'Invalid shortcut' }
+  }
+  await saveShortcutOverrides()
+  safeBuildMenu()
+  const resolved = resolvedShortcuts()
+  sendToUi('shortcuts:changed', resolved)
+  return { ok: true, ...resolved }
+})
+
+ipcMain.handle('shortcuts:reset', async () => {
+  shortcutOverrides = {}
+  await saveShortcutOverrides()
+  safeBuildMenu()
+  const resolved = resolvedShortcuts()
+  sendToUi('shortcuts:changed', resolved)
+  return resolved
+})
 
 // ---- In-file find (⌘F) ----
 ipcMain.handle('find:start', (_e, query: string, opts: { forward?: boolean; findNext?: boolean }) => {

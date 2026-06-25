@@ -2,6 +2,16 @@
 
 All notable changes to **Orchid**. Newest first. Built for macOS (Apple Silicon).
 
+## 1.3.0 — 2026-06-25
+
+**Added**
+- **Customisable keyboard shortcuts.** A new **Settings** panel (⌘, or the gear in the titlebar) lists every command — click a shortcut and press the keys you want. Especially handy on a **Windows-style keyboard**, where you can bind `Ctrl`-based shortcuts (macOS treats `⌘` and `Ctrl` as different keys). Reset any one shortcut, or all of them, to the defaults.
+- **A proper Edit menu** — Undo, Redo, Cut, Copy, Paste, Paste and Match Style, and Select All, so the standard editing keyboard shortcuts work everywhere.
+- **Right-click in the editor** — a context menu with Cut / Copy / Paste / Select All (and Copy on selected preview text).
+
+**Fixed**
+- **The editor now supports cut, copy, and paste** — both the keyboard shortcuts (`⌘X` / `⌘C` / `⌘V`) and the right-click menu. Undo/redo (`⌘Z` / `⌘⇧Z`) drive the editor's own history.
+
 ## 1.2.0 — 2026-06-25
 
 **Changed**

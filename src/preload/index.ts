@@ -16,6 +16,12 @@ export interface WorkspaceFolder {
   isFile?: boolean
 }
 
+export interface ShortcutDef {
+  id: string
+  label: string
+  defaultAccelerator: string
+}
+
 function on<T>(channel: string, cb: (payload: T) => void): () => void {
   const listener = (_e: IpcRendererEvent, payload: T): void => cb(payload)
   ipcRenderer.on(channel, listener)
@@ -63,6 +69,15 @@ const api = {
   findInPage: (query: string, opts: { forward?: boolean; findNext?: boolean }): Promise<void> =>
     ipcRenderer.invoke('find:start', query, opts),
   stopFind: (): Promise<void> => ipcRenderer.invoke('find:stop'),
+  getShortcuts: (): Promise<{ defs: ShortcutDef[]; map: Record<string, string> }> =>
+    ipcRenderer.invoke('shortcuts:get'),
+  setShortcut: (
+    id: string,
+    accelerator: string | null
+  ): Promise<{ ok: boolean; error?: string; defs?: ShortcutDef[]; map?: Record<string, string> }> =>
+    ipcRenderer.invoke('shortcuts:set', id, accelerator),
+  resetShortcuts: (): Promise<{ defs: ShortcutDef[]; map: Record<string, string> }> =>
+    ipcRenderer.invoke('shortcuts:reset'),
   setDirty: (dirty: boolean): void => ipcRenderer.send('win:dirty', dirty),
   confirmClose: (): void => ipcRenderer.send('win:ready-to-close'),
 
@@ -84,6 +99,12 @@ const api = {
   onExportHtml: (cb: () => void) => on('cmd:export-html', cb),
   onExportPdf: (cb: () => void) => on('cmd:export-pdf', cb),
   onShortcuts: (cb: () => void) => on('cmd:shortcuts', cb),
+  onSettings: (cb: () => void) => on('cmd:settings', cb),
+  onCommandPalette: (cb: () => void) => on('cmd:command-palette', cb),
+  onEditUndo: (cb: () => void) => on('cmd:edit-undo', cb),
+  onEditRedo: (cb: () => void) => on('cmd:edit-redo', cb),
+  onShortcutsChanged: (cb: (p: { defs: ShortcutDef[]; map: Record<string, string> }) => void) =>
+    on('shortcuts:changed', cb),
   onDeveloper: (cb: () => void) => on('cmd:developer', cb),
   onSelectFile: (cb: (path: string) => void) => on('file:select', cb),
   onBeginRename: (cb: (path: string) => void) => on('menu:rename', cb),

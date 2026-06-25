@@ -1,7 +1,8 @@
-import { useMemo } from 'react'
+import { useEffect, useMemo, useRef } from 'react'
 import CodeMirror from '@uiw/react-codemirror'
 import { markdown } from '@codemirror/lang-markdown'
 import { EditorView } from '@codemirror/view'
+import { undo, redo } from '@codemirror/commands'
 import { EditorState, type Extension } from '@codemirror/state'
 import { createTheme } from '@uiw/codemirror-themes'
 import { tags as t } from '@lezer/highlight'
@@ -31,6 +32,18 @@ export default function Editor({
   const content = useStore((s) => s.content)
   const setContent = useStore((s) => s.setContent)
   const accentKey = useStore((s) => s.accentKey)
+  const viewRef = useRef<EditorView | null>(null)
+
+  // Undo/Redo are routed from the Edit menu so they drive CodeMirror's own
+  // history (Electron's native execCommand undo doesn't).
+  useEffect(() => {
+    if (readOnly) return
+    const off = [
+      window.orchid.onEditUndo(() => viewRef.current && undo(viewRef.current)),
+      window.orchid.onEditRedo(() => viewRef.current && redo(viewRef.current))
+    ]
+    return () => off.forEach((f) => f())
+  }, [readOnly])
 
   const theme = useMemo(() => {
     const root = getComputedStyle(document.documentElement)
@@ -88,6 +101,7 @@ export default function Editor({
         if (!readOnly) setContent(v)
       }}
       onCreateEditor={(view) => {
+        viewRef.current = view
         // Land the cursor at the very start (0,0) and focus, so editing begins immediately.
         if (!readOnly) {
           view.dispatch({ selection: { anchor: 0, head: 0 } })
