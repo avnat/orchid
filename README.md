@@ -10,6 +10,7 @@ Point it at a folder (or several) and Orchid surfaces every Markdown file inside
 beautifully rendered, live-updating, and built for *reading*. Now also creates, edits,
 and syntax-highlights code files.
 
+[![Download — latest release](https://img.shields.io/github/v/release/avnat/orchid?label=download&color=7c4dd6&sort=semver)](https://github.com/avnat/orchid/releases/latest)
 [![License: MIT](https://img.shields.io/badge/License-MIT-7c4dd6.svg)](LICENSE)
 ![Platform: macOS](https://img.shields.io/badge/platform-macOS%20(Apple%20Silicon)-555.svg)
 ![Built with Electron + React](https://img.shields.io/badge/built%20with-Electron%20%2B%20React-7c4dd6.svg)
@@ -72,7 +73,7 @@ Press Return, then open Orchid normally. You only ever need this once.
 **Read**
 - **Rich preview** — GFM tables, task lists, syntax-highlighted code, callouts, images, a frontmatter header, **KaTeX math**, and **Mermaid diagrams**.
 - **Built for focus** — refined typography; resizable panels; collapse the sidebar or contents rail right from the divider (a circular handle appears on hover), or one **focus button** to hide everything. A **Reading / Editing** badge always shows your mode.
-- **Themes** — light (*Bloom*) / dark (*Dusk*) following the system, **16 accent presets**, a **bring-your-own custom colour**, and adjustable sidebar & index text sizes.
+- **Themes** — light (*Bloom*) / dark (*Dusk*) following the system, **13 accent presets**, a **bring-your-own custom colour**, and adjustable sidebar & index text sizes.
 
 **Create & edit**
 - **New files** (`⌘N`) and **folders** (`⌘⇧N`) — from the menu or the sidebar `+`; code files get syntax highlighting; extension-less files default to `.txt`.
@@ -96,7 +97,7 @@ Orchid follows your system appearance — **Bloom** (light) and **Dusk** (dark) 
 <br/><em>Pinned files · multi-folder workspaces · contents rail</em>
 <br/><br/>
 <img src="docs/img/themes.png" width="780" alt="Accent presets" />
-<br/><em>16 accent presets + a custom colour</em>
+<br/><em>13 accent presets + a custom colour</em>
 </div>
 
 ## Keyboard shortcuts
@@ -129,6 +130,15 @@ npm run dist     # package a signed .dmg into dist/
 
 See [`CONCEPT.md`](CONCEPT.md) for the design rationale, and the in-app **Help → Contributing & Developer Info**.
 
+## Releases
+
+Builds are produced by **GitHub Actions**, not by hand:
+
+- Each release is **tagged** `vX.Y.Z`. Pushing that tag triggers the release workflow, which builds the macOS (Apple Silicon) `.dmg`, ad-hoc signs it, and publishes a **GitHub Release** with the dmg attached.
+- The newest stable build is always at **[/releases/latest](https://github.com/avnat/orchid/releases/latest)** — that's the one to download (and the **Download** badge above links straight to it).
+- Every past version stays on the **[Releases page](https://github.com/avnat/orchid/releases)**, so you can always go back to an older build. Build logs live under the **[Actions tab](https://github.com/avnat/orchid/actions)**.
+- Release candidates are tagged `vX.Y.Z-rc.N` and published as **prereleases** — testable, but never marked "latest" (and skipped by the in-app updater).
+
 ## Acknowledgements
 
 Orchid stands on the shoulders of remarkable open-source work — every dependency below is MIT- or similarly permissively licensed. Thank you to their authors and maintainers.
@@ -141,7 +151,13 @@ Orchid stands on the shoulders of remarkable open-source work — every dependen
 
 ## Contributing
 
-Issues and pull requests are welcome. Run `npm run typecheck` before pushing, and keep changes in the style of their neighbours. Version history lives in [`CHANGELOG.md`](CHANGELOG.md).
+Contributions are welcome — the project runs a normal issue → branch → PR flow:
+
+1. **Open an issue** describing the bug or feature (use the Bug / Feature templates).
+2. **Branch** off `main` (`fix/…`, `feat/…`, `chore/…`), make your change, and run `npm run typecheck`.
+3. **Open a pull request** linking the issue (`Closes #NN`). CI (typecheck + build) runs automatically; the maintainer reviews and merges — `main` is protected, so changes land via PR, not direct pushes.
+
+Keep changes focused and in the style of their neighbours, and don't add company-specific or proprietary content to the sample/docs. Full details in [`CONTRIBUTING.md`](CONTRIBUTING.md); version history in [`CHANGELOG.md`](CHANGELOG.md).
 
 ## License
 

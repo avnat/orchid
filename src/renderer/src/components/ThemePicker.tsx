@@ -49,6 +49,9 @@ export default function ThemePicker(): JSX.Element {
   const dark = appearance === 'system' ? systemDark : appearance === 'dark'
   const current = accentByKey(accentKey)
   const swatch = (a: { light: string; dark: string }): string => (dark ? a.dark : a.light)
+  // Button dot previews the live accent; 'custom' isn't in ACCENTS, so use the
+  // chosen custom colour instead of accentByKey's Orchid fallback.
+  const dotColor = accentKey === 'custom' ? customAccent : swatch(current)
 
   return (
     <div className="theme-picker" ref={ref}>
@@ -59,7 +62,7 @@ export default function ThemePicker(): JSX.Element {
         aria-haspopup="true"
         aria-expanded={open}
       >
-        <span className="swatch-dot" style={{ background: swatch(current) }} />
+        <span className="swatch-dot" style={{ background: dotColor }} />
         Theme
       </button>
 
@@ -92,19 +95,20 @@ export default function ThemePicker(): JSX.Element {
                 <span className="swatch-name">{a.name}</span>
               </button>
             ))}
+            {/* Custom: your colour — click to select it (like any swatch). */}
             <button
               className={accentKey === 'custom' ? 'swatch on' : 'swatch'}
-              title="Use your custom colour"
+              title={`Custom ${customAccent.toUpperCase()}`}
+              aria-label="Use your custom colour"
               onClick={() => setAccent('custom')}
             >
               <span className="ring custom-ring" style={{ background: customAccent }} />
               <span className="swatch-name">Custom</span>
             </button>
-          </div>
-
-          <div className="custom-row">
-            <label className="custom-well" title="Pick your colour">
-              <span className="ring" style={{ background: customAccent }} />
+            {/* Pick: rainbow swatch — opens the OS colour picker to set the custom colour. */}
+            <label className="swatch pick" title="Pick a colour">
+              <span className="ring pick-ring" />
+              <span className="swatch-name">Pick…</span>
               <input
                 type="color"
                 className="custom-color-input"
@@ -112,8 +116,6 @@ export default function ThemePicker(): JSX.Element {
                 onChange={(e) => setCustomAccent(e.target.value)}
               />
             </label>
-            <span className="custom-hex">{customAccent.toUpperCase()}</span>
-            <span className="custom-cap">Pick your colour</span>
           </div>
 
           <div className="pop-label">Sidebar text size</div>
