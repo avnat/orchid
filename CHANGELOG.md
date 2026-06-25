@@ -2,6 +2,19 @@
 
 All notable changes to **Orchid**. Newest first. Built for macOS (Apple Silicon).
 
+## 1.2.0 — 2026-06-25
+
+**Changed**
+- **Redesigned accent picker.** Choosing your own colour is now two clear controls: a solid **Custom** swatch (tap to use your colour, like any preset) and a rainbow **Pick…** swatch that opens the colour picker. The selection ring matches the preset swatches.
+- **Trimmed to 13 curated accent presets** (dropped Periwinkle, Jade, and Slate) for a tidier, shorter picker.
+
+**Fixed**
+- **The Theme button's colour dot now reflects a custom accent** instead of staying on the default.
+
+**Under the hood**
+- **Security & platform update** — upgraded to **Electron 39** (closes 17 runtime security advisories), **electron-builder 26** (pulls a patched `tar`), and **Vite 6**. `npm audit` is clean. No change to how the app looks or behaves — it still ships as the same ad-hoc-signed Apple Silicon build.
+- **Test suite** — added a Vitest unit suite with 100% coverage of the logic layer (store, file scan, export, themes, version compare), enforced in CI on every change.
+
 ## 1.1.2 — 2026-06-24
 
 **Fixed**
