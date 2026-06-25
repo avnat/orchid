@@ -303,8 +303,9 @@ function createWindow(): void {
   })
 
   if (isDev) {
-    mainWindow.webContents.on('console-message', (_e, level, message, line, sourceId) => {
-      if (level >= 2) console.log(`[renderer ${level >= 3 ? 'ERROR' : 'WARN'}] ${message} (${sourceId}:${line})`)
+    mainWindow.webContents.on('console-message', (e) => {
+      if (e.level === 'warning' || e.level === 'error')
+        console.log(`[renderer ${e.level.toUpperCase()}] ${e.message} (${e.sourceId}:${e.lineNumber})`)
     })
     mainWindow.loadURL(process.env['ELECTRON_RENDERER_URL']!)
   } else {
