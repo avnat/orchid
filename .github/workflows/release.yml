@@ -31,7 +31,10 @@ jobs:
       - run: npm ci
       - run: npm run build
       - name: Build dmg (arm64, ad-hoc signed)
-        run: npx electron-builder --mac dmg --arm64
+        # --publish never: electron-builder 26 implicitly tries to publish to
+        # GitHub when it sees a git tag (and fails without GH_TOKEN). We publish
+        # separately below via action-gh-release, so build only.
+        run: npx electron-builder --mac dmg --arm64 --publish never
       - name: Resolve tag + prerelease
         id: meta
         run: |
