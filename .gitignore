@@ -4,3 +4,12 @@ dist
 .DS_Store
 *.log
 *.tsbuildinfo
+
+# editors
+.vscode
+.idea
+
+# transient / generated
+release-notes.md
+*.dmg
+coverage
