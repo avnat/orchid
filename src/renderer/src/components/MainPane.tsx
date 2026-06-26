@@ -3,11 +3,13 @@ import { useStore } from '../store/useStore'
 import MarkdownView from '../markdown/MarkdownView'
 import ConflictBanner from './ConflictBanner'
 import Toc from './Toc'
-import { isMarkdownFile, langForFile } from '../markdown/langs'
+import { isMarkdownFile, isPdfFile, langForFile } from '../markdown/langs'
 
 // CodeMirror + its language packages are sizeable; load the editor lazily so it
 // stays out of the startup bundle until the user actually edits or opens code.
 const Editor = lazy(() => import('./Editor'))
+// pdf.js is large too — only pulled in when a PDF is opened.
+const PdfView = lazy(() => import('./PdfView'))
 
 export default function MainPane(): JSX.Element {
   const activePath = useStore((s) => s.activePath)
@@ -67,6 +69,17 @@ export default function MainPane(): JSX.Element {
             <p style={{ color: 'var(--muted)' }}>Select a file from the sidebar to preview it.</p>
           </div>
         </div>
+      </div>
+    )
+  }
+
+  // PDFs render in the pdf.js viewer (read-only).
+  if (isPdfFile(activePath)) {
+    return (
+      <div className="main">
+        <Suspense fallback={<div className="pdf-loading">Loading PDF…</div>}>
+          <PdfView path={activePath} />
+        </Suspense>
       </div>
     )
   }

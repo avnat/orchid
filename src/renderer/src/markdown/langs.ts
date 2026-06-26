@@ -13,6 +13,10 @@ export function isMarkdownFile(name: string): boolean {
   return /\.(md|markdown|mdx)$/i.test(name)
 }
 
+export function isPdfFile(name: string): boolean {
+  return /\.pdf$/i.test(name)
+}
+
 /** CodeMirror language extension for a filename, or null for plain text. */
 export function langForFile(name: string): Extension | null {
   const parts = name.toLowerCase().split('.')

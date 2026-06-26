@@ -13,7 +13,7 @@ import UpdateDialog, { type UpdateInfo } from './components/UpdateDialog'
 import PdfDialog, { type PdfOptions } from './components/PdfDialog'
 import FindBar from './components/FindBar'
 import { buildStandaloneHtml } from './markdown/exportDoc'
-import { isMarkdownFile } from './markdown/langs'
+import { isMarkdownFile, isPdfFile } from './markdown/langs'
 import { accentByKey } from './themes'
 import { matchAccelerator } from './lib/accelerator'
 
@@ -108,7 +108,8 @@ export default function App(): JSX.Element {
         if (path) void window.orchid.rescan(path)
       }),
       window.orchid.onToggleEdit(() => {
-        if (s().activePath) s().toggleEdit()
+        const ap = s().activePath
+        if (ap && !isPdfFile(ap)) s().toggleEdit()
       }),
       window.orchid.onSave(() => void s().save()),
       window.orchid.onFocusMode(() => s().toggleFullscreen()),
@@ -261,6 +262,7 @@ export default function App(): JSX.Element {
 
   const showSidebar = !focusMode
   const anyPanelShown = !focusMode || tocVisible
+  const isPdf = !!activePath && isPdfFile(activePath)
 
   return (
     <div className="app">
@@ -290,7 +292,7 @@ export default function App(): JSX.Element {
             </button>
             <button
               className={editMode ? 'on' : ''}
-              disabled={!activePath}
+              disabled={!activePath || isPdf}
               onClick={() => !editMode && useStore.getState().toggleEdit()}
             >
               Edit

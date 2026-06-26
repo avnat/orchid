@@ -1,6 +1,11 @@
+import { useEffect, useState } from 'react'
 import OrchidMark from './OrchidMark'
 
 export default function EmptyState(): JSX.Element {
+  const [version, setVersion] = useState('')
+  useEffect(() => {
+    void window.orchid.getVersion().then(setVersion)
+  }, [])
   return (
     <div className="empty">
       <div className="lockup">
@@ -33,6 +38,7 @@ export default function EmptyState(): JSX.Element {
         >
           say hi @AvneeNathani
         </a>
+        {version && <span className="version-tag"> · v{version}</span>}
       </div>
     </div>
   )

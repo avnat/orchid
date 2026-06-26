@@ -3,7 +3,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { promises as fs } from 'fs'
 import { join } from 'path'
 import { tmpdir } from 'os'
-import { scanFolder, MD_EXTENSIONS, TEXT_EXTENSIONS } from '../src/main/fs-scan'
+import { scanFolder, MD_EXTENSIONS, TEXT_EXTENSIONS, MEDIA_EXTENSIONS } from '../src/main/fs-scan'
 
 let root: string
 
@@ -24,6 +24,9 @@ afterEach(async () => {
 describe('extension lists', () => {
   it('TEXT_EXTENSIONS includes all markdown extensions', () => {
     for (const ext of MD_EXTENSIONS) expect(TEXT_EXTENSIONS).toContain(ext)
+  })
+  it('MEDIA_EXTENSIONS covers pdf', () => {
+    expect(MEDIA_EXTENSIONS).toContain('.pdf')
   })
 })
 
@@ -62,6 +65,13 @@ describe('scanFolder', () => {
     expect(await scanFolder(root)).toEqual([])
   })
 
+  it('surfaces PDF files (viewable media)', async () => {
+    await write('report.pdf', '%PDF-1.4')
+    await write('image.png')
+    const nodes = await scanFolder(root)
+    expect(nodes.map((n) => n.name)).toEqual(['report.pdf'])
+  })
+
   it('skips dotfiles and dot-directories', async () => {
     await write('.secret.md')
     await write('.config/a.md')
@@ -78,14 +88,17 @@ describe('scanFolder', () => {
     expect(nodes.map((n) => n.name)).toEqual(['keep.md'])
   })
 
-  it('keeps directories that lead to markdown and prunes empty ones', async () => {
+  it('keeps every non-ignored directory, including empty ones', async () => {
+    // A just-created (empty) folder must show up, so directories are never pruned.
     await write('docs/guide.md')
     await fs.mkdir(join(root, 'empty'), { recursive: true })
-    await write('assets/logo.png') // no surfaced files → pruned
+    await write('assets/logo.png') // no surfaced files, but the folder still shows
     const nodes = await scanFolder(root)
-    expect(nodes.map((n) => n.name)).toEqual(['docs'])
-    expect(nodes[0].type).toBe('dir')
-    expect(nodes[0].children!.map((c) => c.name)).toEqual(['guide.md'])
+    expect(nodes.map((n) => n.name)).toEqual(['assets', 'docs', 'empty'])
+    const docs = nodes.find((n) => n.name === 'docs')!
+    expect(docs.children!.map((c) => c.name)).toEqual(['guide.md'])
+    expect(nodes.find((n) => n.name === 'empty')!.children).toEqual([])
+    expect(nodes.find((n) => n.name === 'assets')!.children).toEqual([])
   })
 
   it('still lists a file with mtime 0 when stat fails', async () => {

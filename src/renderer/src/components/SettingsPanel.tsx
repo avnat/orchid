@@ -17,6 +17,11 @@ export default function SettingsPanel({
   const [data, setData] = useState<ShortcutData | null>(null)
   const [recording, setRecording] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [version, setVersion] = useState('')
+
+  useEffect(() => {
+    if (open) void window.orchid.getVersion().then(setVersion)
+  }, [open])
 
   // Load the live shortcut map whenever the panel opens, and track changes
   // pushed from the main process (e.g. another reset).
@@ -136,6 +141,7 @@ export default function SettingsPanel({
             )
           })}
         </div>
+        {version && <div className="settings-version">Orchid v{version}</div>}
       </div>
     </div>
   )

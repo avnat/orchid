@@ -102,6 +102,24 @@ function flattenVisible(
   return out
 }
 
+/** Every directory path across all open folders (roots + nested) — for collapse/expand all. */
+function allDirPaths(folders: WorkspaceFolder[]): string[] {
+  const out: string[] = []
+  const walk = (ns: MdNode[]): void => {
+    for (const n of ns)
+      if (n.type === 'dir') {
+        out.push(n.path)
+        walk(n.children ?? [])
+      }
+  }
+  for (const f of folders) {
+    if (f.isFile) continue
+    out.push(f.root)
+    walk(f.tree)
+  }
+  return out
+}
+
 /** Map every node path → node, across all open folders (for the pinned list). */
 function buildNodeMap(folders: WorkspaceFolder[]): Map<string, MdNode> {
   const m = new Map<string, MdNode>()
@@ -619,6 +637,11 @@ export default function Sidebar(): JSX.Element {
     [folders, filter, sortMode, collapsed]
   )
 
+  // Collapse all / expand all (a single toggle that flips based on current state).
+  const allDirs = useMemo(() => allDirPaths(folders), [folders])
+  const allCollapsed = allDirs.length > 0 && allDirs.every((d) => collapsed.has(d))
+  const toggleAll = (): void => setCollapsed(allCollapsed ? new Set() : new Set(allDirs))
+
   const scrollIntoView = (path: string): void => {
     requestAnimationFrame(() => {
       const rows = asideRef.current?.querySelectorAll<HTMLElement>('[data-path]')
@@ -776,6 +799,15 @@ export default function Sidebar(): JSX.Element {
             onClick={() => setSelectMode(!selectMode)}
           >
             ☑
+          </button>
+          <button
+            className="side-refresh"
+            title={allCollapsed ? 'Expand all folders' : 'Collapse all folders'}
+            aria-label={allCollapsed ? 'Expand all folders' : 'Collapse all folders'}
+            disabled={allDirs.length === 0}
+            onClick={toggleAll}
+          >
+            {allCollapsed ? '⊞' : '⊟'}
           </button>
           <button className="side-refresh" title="Refresh (⌘R)" aria-label="Refresh" onClick={() => window.orchid.refresh()}>
             ↻

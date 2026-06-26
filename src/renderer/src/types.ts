@@ -36,10 +36,12 @@ export interface OrchidApi {
   move: (src: string, destDir: string) => Promise<string>
   fileMenu: (path: string, opts?: { pinned?: boolean; isFolder?: boolean }) => Promise<void>
   readFile: (path: string) => Promise<string>
+  readBinary: (path: string) => Promise<Uint8Array>
   writeFile: (path: string, content: string) => Promise<boolean>
   reveal: (path: string) => Promise<void>
   openExternal: (url: string) => Promise<void>
   checkUpdates: () => Promise<void>
+  getVersion: () => Promise<string>
   newFile: () => Promise<void>
   getTheme: () => Promise<{ shouldUseDarkColors: boolean }>
   search: (query: string) => Promise<SearchHit[]>

@@ -1,6 +1,7 @@
-import { app, shell, BrowserWindow, ipcMain, dialog, Menu, nativeTheme, protocol, net, screen, clipboard } from 'electron'
+import { app, shell, BrowserWindow, ipcMain, dialog, Menu, nativeTheme, protocol, net, screen, clipboard, crashReporter } from 'electron'
 import { join, resolve, relative, sep, basename, dirname } from 'path'
-import { promises as fs } from 'fs'
+import { promises as fs, existsSync, writeFileSync, unlinkSync } from 'fs'
+import { reportCrash } from './crash-report'
 import { pathToFileURL } from 'url'
 import { scanFolder, TEXT_EXTENSIONS, type MdNode } from './fs-scan'
 import { watchPaths, stopWatching } from './watcher'
@@ -17,6 +18,7 @@ interface WSFolder {
 }
 
 let mainWindow: BrowserWindow | null = null
+let lastRendererReload = 0
 let workspace: WSFolder[] = []
 let currentFiles: string[] = []
 let unsavedChanges = false
@@ -318,6 +320,19 @@ function createWindow(): void {
     mainWindow = null
   })
 
+  // The renderer crashed (gone / OOM / GPU) — report it, then auto-recover by
+  // reloading the window so the user sees a brief flash instead of a dead window.
+  // A 5s guard prevents a reload storm if it crashes again immediately on load.
+  mainWindow.webContents.on('render-process-gone', (_e, details) => {
+    if (details.reason === 'clean-exit') return
+    reportCrash('render-process-gone', `${details.reason} (exitCode ${details.exitCode})`, crashMeta())
+    const now = Date.now()
+    if (windowAlive() && now - lastRendererReload > 5000) {
+      lastRendererReload = now
+      mainWindow!.webContents.reload()
+    }
+  })
+
   // In-file find (⌘F) — relay native find results to the renderer's find bar.
   mainWindow.webContents.on('found-in-page', (_e, result) => {
     sendToUi('find:result', {
@@ -545,8 +560,61 @@ function buildMenu(): void {
   Menu.setApplicationMenu(Menu.buildFromTemplate(template))
 }
 
+// Collect native crashes locally (no upload — we read them on next launch).
+crashReporter.start({ uploadToServer: false })
+
+function crashMeta(): { version: string; os: string; arch: string } {
+  return { version: app.getVersion(), os: process.getSystemVersion(), arch: process.arch }
+}
+
+// Last line of defence against "Orchid quit unexpectedly": a stray error in the
+// main process (a background timer, an IPC handler, a rejected promise) would
+// otherwise take the whole app down. Report it and keep running.
+process.on('uncaughtException', (err) => {
+  console.error('[main] uncaught exception:', err)
+  reportCrash('uncaughtException', err?.stack ?? String(err), crashMeta())
+})
+process.on('unhandledRejection', (reason) => {
+  console.error('[main] unhandled rejection:', reason)
+  const detail = reason instanceof Error ? (reason.stack ?? reason.message) : String(reason)
+  reportCrash('unhandledRejection', detail, crashMeta())
+})
+
+// "Did the last run exit cleanly?" sentinel — catches hard native crashes (which
+// can't run JS at crash time) by noticing the marker survived to the next launch.
+function crashSentinel(): string {
+  return join(app.getPath('userData'), '.running')
+}
+function armSentinel(): void {
+  try {
+    if (existsSync(crashSentinel())) {
+      reportCrash('unclean-exit', 'Previous session did not exit cleanly (possible native crash).', crashMeta())
+    }
+    writeFileSync(crashSentinel(), String(Date.now()), 'utf8')
+  } catch {
+    /* ignore */
+  }
+}
+app.on('will-quit', () => {
+  try {
+    unlinkSync(crashSentinel())
+  } catch {
+    /* ignore */
+  }
+})
+app.on('child-process-gone', (_e, d) => {
+  if (d.reason !== 'clean-exit') reportCrash('child-process-gone', `${d.type}: ${d.reason}`, crashMeta())
+})
+
 app.whenReady().then(async () => {
+  armSentinel()
   await loadShortcutOverrides()
+  app.setAboutPanelOptions({
+    applicationName: 'Orchid',
+    applicationVersion: app.getVersion(),
+    copyright: '© 2026 Avnee · MIT',
+    credits: 'A calm, native macOS reader for the Markdown your tools generate.'
+  })
   protocol.handle('orchid-asset', (request) => {
     const url = new URL(request.url)
     const filePath = decodeURIComponent(url.pathname.replace(/^\//, ''))
@@ -727,6 +795,13 @@ ipcMain.handle('fs:write', async (_e, filePath: string, content: string) => {
   return true
 })
 
+// Raw bytes for binary viewers (e.g. the PDF reader). Returned as a Uint8Array.
+ipcMain.handle('fs:readBinary', async (_e, filePath: string) => {
+  if (!withinWorkspace(filePath)) throw new Error('Path outside the workspace')
+  const buf = await fs.readFile(filePath)
+  return new Uint8Array(buf)
+})
+
 ipcMain.handle('fs:reveal', async (_e, filePath: string) => {
   if (!withinWorkspace(filePath)) return
   shell.showItemInFolder(filePath)
@@ -868,6 +943,8 @@ ipcMain.handle('update:check', async () => checkForUpdates(true))
 ipcMain.handle('app:new-file', async () => newFileFlow())
 
 ipcMain.handle('theme:get', async () => ({ shouldUseDarkColors: nativeTheme.shouldUseDarkColors }))
+
+ipcMain.handle('app:getVersion', async () => app.getVersion())
 
 // ---- Shortcuts IPC ----
 ipcMain.handle('shortcuts:get', async () => resolvedShortcuts())

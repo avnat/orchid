@@ -47,11 +47,13 @@ const api = {
     ipcRenderer.invoke('fs:fileMenu', path, opts),
   rescan: (changedPath: string): Promise<void> => ipcRenderer.invoke('workspace:rescan', changedPath),
   readFile: (path: string): Promise<string> => ipcRenderer.invoke('fs:read', path),
+  readBinary: (path: string): Promise<Uint8Array> => ipcRenderer.invoke('fs:readBinary', path),
   writeFile: (path: string, content: string): Promise<boolean> =>
     ipcRenderer.invoke('fs:write', path, content),
   reveal: (path: string): Promise<void> => ipcRenderer.invoke('fs:reveal', path),
   openExternal: (url: string): Promise<void> => ipcRenderer.invoke('shell:openExternal', url),
   checkUpdates: (): Promise<void> => ipcRenderer.invoke('update:check'),
+  getVersion: (): Promise<string> => ipcRenderer.invoke('app:getVersion'),
   newFile: (): Promise<void> => ipcRenderer.invoke('app:new-file'),
   getTheme: (): Promise<{ shouldUseDarkColors: boolean }> => ipcRenderer.invoke('theme:get'),
   search: (
