@@ -209,9 +209,11 @@ export default function App(): JSX.Element {
         e.preventDefault()
         if (useStore.getState().folders.length) setSearchOpen(true)
       } else if ((e.metaKey || e.ctrlKey) && !e.shiftKey && !e.altKey && (e.key === 'f' || e.key === 'F')) {
-        // ⌘F = find in a rendered markdown preview (code files keep CodeMirror's own ⌘F)
+        // ⌘F = find in a rendered markdown preview or a PDF (code files keep
+        // CodeMirror's own ⌘F).
         const st = useStore.getState()
-        if (st.activePath && isMarkdownFile(st.activePath) && !st.editMode) {
+        const ap = st.activePath
+        if (ap && (isPdfFile(ap) || (isMarkdownFile(ap) && !st.editMode))) {
           e.preventDefault()
           setFindOpen(true)
         }

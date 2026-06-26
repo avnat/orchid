@@ -5,7 +5,7 @@ All notable changes to **Orchid**. Newest first. Built for macOS (Apple Silicon)
 ## 1.3.0 — 2026-06-26
 
 **Added**
-- **PDF reading.** Open a `.pdf` and read it right inside Orchid — rendered in the app's own calm viewer (not the grey system one), with fit-to-width, zoom, and selectable text.
+- **PDF reading.** Open a `.pdf` and read it right inside Orchid — rendered in the app's own calm viewer (not the grey system one), with fit-to-width, zoom, selectable text, and **find (`⌘F`)** across the whole document.
 - **Customisable keyboard shortcuts.** A new **Settings** panel (⌘, or the gear in the titlebar) lists every command — click a shortcut and press the keys you want. Especially handy on a **Windows-style keyboard**, where you can bind `Ctrl`-based shortcuts (macOS treats `⌘` and `Ctrl` as different keys). Reset any one shortcut, or all of them, to the defaults.
 - **A proper Edit menu** — Undo, Redo, Cut, Copy, Paste, Paste and Match Style, and Select All, so the standard editing keyboard shortcuts work everywhere.
 - **Right-click in the editor** — a context menu with Cut / Copy / Paste / Select All (and Copy on selected preview text).

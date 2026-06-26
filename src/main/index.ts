@@ -1,6 +1,6 @@
 import { app, shell, BrowserWindow, ipcMain, dialog, Menu, nativeTheme, protocol, net, screen, clipboard, crashReporter } from 'electron'
 import { join, resolve, relative, sep, basename, dirname } from 'path'
-import { promises as fs, existsSync, writeFileSync, unlinkSync } from 'fs'
+import { promises as fs, existsSync, writeFileSync, readFileSync, unlinkSync, readdirSync, statSync } from 'fs'
 import { reportCrash } from './crash-report'
 import { pathToFileURL } from 'url'
 import { scanFolder, TEXT_EXTENSIONS, type MdNode } from './fs-scan'
@@ -580,27 +580,74 @@ process.on('unhandledRejection', (reason) => {
   reportCrash('unhandledRejection', detail, crashMeta())
 })
 
-// "Did the last run exit cleanly?" sentinel — catches hard native crashes (which
-// can't run JS at crash time) by noticing the marker survived to the next launch.
+// Native-crash detection. A hard crash can't run JS at crash time, so we notice
+// it on the *next* launch — but only report it when there's an actual crash dump
+// as evidence. A missing marker alone is ambiguous (force-quit, OS shutdown, or
+// `kill` look identical to a crash), so the marker is cleared on every known exit
+// path below and the dump is what confirms a real crash. This keeps the crash
+// log trustworthy instead of flooding it with false positives.
 function crashSentinel(): string {
   return join(app.getPath('userData'), '.running')
 }
+function clearSentinel(): void {
+  try {
+    unlinkSync(crashSentinel())
+  } catch {
+    /* already gone */
+  }
+}
+/** True if a crash dump was written since `sinceMs` (real native crash evidence). */
+function crashDumpSince(sinceMs: number): boolean {
+  try {
+    const base = app.getPath('crashDumps')
+    for (const dir of [base, join(base, 'completed'), join(base, 'pending')]) {
+      let files: string[]
+      try {
+        files = readdirSync(dir)
+      } catch {
+        continue
+      }
+      for (const f of files) {
+        if (!f.endsWith('.dmp')) continue
+        try {
+          if (statSync(join(dir, f)).mtimeMs >= sinceMs - 1000) return true
+        } catch {
+          /* ignore */
+        }
+      }
+    }
+  } catch {
+    /* ignore */
+  }
+  return false
+}
 function armSentinel(): void {
   try {
-    if (existsSync(crashSentinel())) {
-      reportCrash('unclean-exit', 'Previous session did not exit cleanly (possible native crash).', crashMeta())
+    const f = crashSentinel()
+    if (existsSync(f)) {
+      const since = Number(readFileSync(f, 'utf8')) || 0
+      // Only report if a crash dump backs it up — otherwise it was a force-quit
+      // / OS kill, not a crash.
+      if (crashDumpSince(since)) {
+        reportCrash('native-crash', 'Previous session crashed (native crash dump found).', crashMeta())
+      }
     }
-    writeFileSync(crashSentinel(), String(Date.now()), 'utf8')
+    writeFileSync(f, String(Date.now()), 'utf8')
   } catch {
     /* ignore */
   }
 }
-app.on('will-quit', () => {
-  try {
-    unlinkSync(crashSentinel())
-  } catch {
-    /* ignore */
-  }
+app.on('will-quit', clearSentinel)
+app.on('before-quit', clearSentinel)
+// SIGTERM/SIGINT (e.g. `kill`, or the OS asking us to quit) are clean exits, not
+// crashes — clear the marker so they aren't mistaken for one next launch.
+process.on('SIGTERM', () => {
+  clearSentinel()
+  process.exit(0)
+})
+process.on('SIGINT', () => {
+  clearSentinel()
+  process.exit(0)
 })
 app.on('child-process-gone', (_e, d) => {
   if (d.reason !== 'clean-exit') reportCrash('child-process-gone', `${d.type}: ${d.reason}`, crashMeta())

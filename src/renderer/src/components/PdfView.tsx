@@ -44,6 +44,7 @@ function PdfPage({ doc, pageNumber, scale }: { doc: PDFDocumentProxy; pageNumber
     return () => io.disconnect()
   }, [])
 
+  // Canvas — rendered lazily (only near the viewport) to stay smooth.
   useEffect(() => {
     if (!visible) return
     let cancelled = false
@@ -66,14 +67,7 @@ function PdfPage({ doc, pageNumber, scale }: { doc: PDFDocumentProxy; pageNumber
       try {
         await task.promise
       } catch {
-        return // render cancelled (scale changed / unmounted)
-      }
-      const textEl = textRef.current
-      if (textEl && !cancelled) {
-        textEl.replaceChildren()
-        textEl.style.setProperty('--scale-factor', String(scale))
-        const layer = new pdfjs.TextLayer({ textContentSource: page.streamTextContent(), container: textEl, viewport: vp })
-        await layer.render().catch(() => {})
+        /* render cancelled (scale changed / unmounted) */
       }
     })()
     return () => {
@@ -81,6 +75,26 @@ function PdfPage({ doc, pageNumber, scale }: { doc: PDFDocumentProxy; pageNumber
       taskRef.current?.cancel()
     }
   }, [visible, doc, pageNumber, scale])
+
+  // Text layer — rendered EAGERLY for every page (not just visible ones) so
+  // ⌘F / find-in-page searches the whole document, and text stays selectable.
+  useEffect(() => {
+    let cancelled = false
+    void (async () => {
+      const page = await doc.getPage(pageNumber)
+      if (cancelled) return
+      const textEl = textRef.current
+      if (!textEl) return
+      const vp = page.getViewport({ scale })
+      textEl.replaceChildren()
+      textEl.style.setProperty('--scale-factor', String(scale))
+      const layer = new pdfjs.TextLayer({ textContentSource: page.streamTextContent(), container: textEl, viewport: vp })
+      await layer.render().catch(() => {})
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [doc, pageNumber, scale])
 
   return (
     <div className="pdf-page" ref={wrapRef} style={size ? { width: size.w, height: size.h } : undefined}>
