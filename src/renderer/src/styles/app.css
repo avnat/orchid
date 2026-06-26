@@ -502,8 +502,10 @@
   position: absolute;
   top: calc(100% + 4px);
   left: 0;
-  right: 0;
-  z-index: 20;
+  /* Sized to its content (not the narrow trigger) so labels never wrap. */
+  right: auto;
+  min-width: 168px;
+  z-index: 30;
   background: var(--surface);
   border: 1px solid var(--line);
   border-radius: 8px;
@@ -516,6 +518,7 @@
   gap: 4px;
   width: 100%;
   text-align: left;
+  white-space: nowrap;
   background: transparent;
   border: 0;
   border-radius: 6px;

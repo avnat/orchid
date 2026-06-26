@@ -2,6 +2,11 @@
 
 All notable changes to **Orchid**. Newest first. Built for macOS (Apple Silicon).
 
+## 1.3.1 — 2026-06-26
+
+**Fixed**
+- **Sort menu dropdown** rendered too narrow after the collapse-all button was added — its labels wrapped and overlapped the file list. It's now sized to its contents and layers cleanly above the tree.
+
 ## 1.3.0 — 2026-06-26
 
 **Added**
