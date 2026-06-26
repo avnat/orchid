@@ -35,6 +35,12 @@ export const TEXT_EXTENSIONS = [
   '.sql'
 ]
 
+// Binary formats Orchid can display but not read as text (rendered by a viewer).
+export const MEDIA_EXTENSIONS = ['.pdf']
+
+// Everything surfaced in the sidebar = readable text/code + viewable media.
+const SHOWN_EXTENSIONS = [...TEXT_EXTENSIONS, ...MEDIA_EXTENSIONS]
+
 const IGNORED_DIRS = new Set([
   'node_modules',
   '.git',
@@ -62,7 +68,7 @@ export interface MdNode {
 
 function isShown(name: string): boolean {
   const lower = name.toLowerCase()
-  return TEXT_EXTENSIONS.some((ext) => lower.endsWith(ext))
+  return SHOWN_EXTENSIONS.some((ext) => lower.endsWith(ext))
 }
 
 /**
@@ -86,16 +92,16 @@ export async function scanFolder(root: string, dir: string = root): Promise<MdNo
 
     if (entry.isDirectory()) {
       if (IGNORED_DIRS.has(name)) continue
+      // Keep every non-ignored directory — even empty ones — so a folder you
+      // just created shows up immediately (and stays visible as you fill it).
       const children = await scanFolder(root, fullPath)
-      if (children.length > 0) {
-        nodes.push({
-          name,
-          path: fullPath,
-          relPath: relative(root, fullPath),
-          type: 'dir',
-          children
-        })
-      }
+      nodes.push({
+        name,
+        path: fullPath,
+        relPath: relative(root, fullPath),
+        type: 'dir',
+        children
+      })
     } else if (entry.isFile() && isShown(name)) {
       let mtimeMs = 0
       try {

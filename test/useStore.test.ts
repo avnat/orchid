@@ -335,6 +335,18 @@ describe('selectFile', () => {
     expect(s.unsupported).toBe(false)
   })
 
+  it('opens a PDF without reading it as text', async () => {
+    const useStore = await freshStore()
+    useStore.setState({ editMode: true })
+    await useStore.getState().selectFile('/report.pdf')
+    const s = useStore.getState()
+    expect(s.activePath).toBe('/report.pdf')
+    expect(s.content).toBe('')
+    expect(s.unsupported).toBe(false)
+    expect(s.editMode).toBe(false)
+    expect(orchidMock.readFile).not.toHaveBeenCalled()
+  })
+
   it('marks unsupported when the read fails (binary)', async () => {
     const useStore = await freshStore()
     orchidMock.readFile.mockRejectedValue(new Error('binary'))

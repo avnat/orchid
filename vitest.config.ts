@@ -23,10 +23,12 @@ export default defineConfig({
       include: [
         'src/main/fs-scan.ts',
         'src/main/version.ts',
+        'src/main/shortcuts.ts',
         'src/renderer/src/themes.ts',
         'src/renderer/src/store/useStore.ts',
         'src/renderer/src/markdown/langs.ts',
-        'src/renderer/src/markdown/exportDoc.ts'
+        'src/renderer/src/markdown/exportDoc.ts',
+        'src/renderer/src/lib/accelerator.ts'
       ],
       thresholds: {
         lines: 100,

@@ -16,6 +16,12 @@ export interface WorkspaceFolder {
   isFile?: boolean
 }
 
+export interface ShortcutDef {
+  id: string
+  label: string
+  defaultAccelerator: string
+}
+
 function on<T>(channel: string, cb: (payload: T) => void): () => void {
   const listener = (_e: IpcRendererEvent, payload: T): void => cb(payload)
   ipcRenderer.on(channel, listener)
@@ -41,11 +47,13 @@ const api = {
     ipcRenderer.invoke('fs:fileMenu', path, opts),
   rescan: (changedPath: string): Promise<void> => ipcRenderer.invoke('workspace:rescan', changedPath),
   readFile: (path: string): Promise<string> => ipcRenderer.invoke('fs:read', path),
+  readBinary: (path: string): Promise<Uint8Array> => ipcRenderer.invoke('fs:readBinary', path),
   writeFile: (path: string, content: string): Promise<boolean> =>
     ipcRenderer.invoke('fs:write', path, content),
   reveal: (path: string): Promise<void> => ipcRenderer.invoke('fs:reveal', path),
   openExternal: (url: string): Promise<void> => ipcRenderer.invoke('shell:openExternal', url),
   checkUpdates: (): Promise<void> => ipcRenderer.invoke('update:check'),
+  getVersion: (): Promise<string> => ipcRenderer.invoke('app:getVersion'),
   newFile: (): Promise<void> => ipcRenderer.invoke('app:new-file'),
   getTheme: (): Promise<{ shouldUseDarkColors: boolean }> => ipcRenderer.invoke('theme:get'),
   search: (
@@ -63,6 +71,15 @@ const api = {
   findInPage: (query: string, opts: { forward?: boolean; findNext?: boolean }): Promise<void> =>
     ipcRenderer.invoke('find:start', query, opts),
   stopFind: (): Promise<void> => ipcRenderer.invoke('find:stop'),
+  getShortcuts: (): Promise<{ defs: ShortcutDef[]; map: Record<string, string> }> =>
+    ipcRenderer.invoke('shortcuts:get'),
+  setShortcut: (
+    id: string,
+    accelerator: string | null
+  ): Promise<{ ok: boolean; error?: string; defs?: ShortcutDef[]; map?: Record<string, string> }> =>
+    ipcRenderer.invoke('shortcuts:set', id, accelerator),
+  resetShortcuts: (): Promise<{ defs: ShortcutDef[]; map: Record<string, string> }> =>
+    ipcRenderer.invoke('shortcuts:reset'),
   setDirty: (dirty: boolean): void => ipcRenderer.send('win:dirty', dirty),
   confirmClose: (): void => ipcRenderer.send('win:ready-to-close'),
 
@@ -84,6 +101,12 @@ const api = {
   onExportHtml: (cb: () => void) => on('cmd:export-html', cb),
   onExportPdf: (cb: () => void) => on('cmd:export-pdf', cb),
   onShortcuts: (cb: () => void) => on('cmd:shortcuts', cb),
+  onSettings: (cb: () => void) => on('cmd:settings', cb),
+  onCommandPalette: (cb: () => void) => on('cmd:command-palette', cb),
+  onEditUndo: (cb: () => void) => on('cmd:edit-undo', cb),
+  onEditRedo: (cb: () => void) => on('cmd:edit-redo', cb),
+  onShortcutsChanged: (cb: (p: { defs: ShortcutDef[]; map: Record<string, string> }) => void) =>
+    on('shortcuts:changed', cb),
   onDeveloper: (cb: () => void) => on('cmd:developer', cb),
   onSelectFile: (cb: (path: string) => void) => on('file:select', cb),
   onBeginRename: (cb: (path: string) => void) => on('menu:rename', cb),

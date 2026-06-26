@@ -14,6 +14,12 @@ export interface WorkspaceFolder {
   isFile?: boolean
 }
 
+export interface ShortcutDef {
+  id: string
+  label: string
+  defaultAccelerator: string
+}
+
 export interface OrchidApi {
   open: () => Promise<void>
   addFolder: () => Promise<void>
@@ -30,10 +36,12 @@ export interface OrchidApi {
   move: (src: string, destDir: string) => Promise<string>
   fileMenu: (path: string, opts?: { pinned?: boolean; isFolder?: boolean }) => Promise<void>
   readFile: (path: string) => Promise<string>
+  readBinary: (path: string) => Promise<Uint8Array>
   writeFile: (path: string, content: string) => Promise<boolean>
   reveal: (path: string) => Promise<void>
   openExternal: (url: string) => Promise<void>
   checkUpdates: () => Promise<void>
+  getVersion: () => Promise<string>
   newFile: () => Promise<void>
   getTheme: () => Promise<{ shouldUseDarkColors: boolean }>
   search: (query: string) => Promise<SearchHit[]>
@@ -45,6 +53,12 @@ export interface OrchidApi {
   ) => Promise<boolean>
   findInPage: (query: string, opts: { forward?: boolean; findNext?: boolean }) => Promise<void>
   stopFind: () => Promise<void>
+  getShortcuts: () => Promise<{ defs: ShortcutDef[]; map: Record<string, string> }>
+  setShortcut: (
+    id: string,
+    accelerator: string | null
+  ) => Promise<{ ok: boolean; error?: string; defs?: ShortcutDef[]; map?: Record<string, string> }>
+  resetShortcuts: () => Promise<{ defs: ShortcutDef[]; map: Record<string, string> }>
   setDirty: (dirty: boolean) => void
   confirmClose: () => void
   onWorkspaceChanged: (cb: (p: { folders: WorkspaceFolder[]; select?: string }) => void) => () => void
@@ -63,6 +77,11 @@ export interface OrchidApi {
   onExportHtml: (cb: () => void) => () => void
   onExportPdf: (cb: () => void) => () => void
   onShortcuts: (cb: () => void) => () => void
+  onSettings: (cb: () => void) => () => void
+  onCommandPalette: (cb: () => void) => () => void
+  onEditUndo: (cb: () => void) => () => void
+  onEditRedo: (cb: () => void) => () => void
+  onShortcutsChanged: (cb: (p: { defs: ShortcutDef[]; map: Record<string, string> }) => void) => () => void
   onDeveloper: (cb: () => void) => () => void
   onSelectFile: (cb: (path: string) => void) => () => void
   onBeginRename: (cb: (path: string) => void) => () => void

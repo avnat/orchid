@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import type { WorkspaceFolder } from '../types'
 import type { Appearance } from '../themes'
+import { isPdfFile } from '../markdown/langs'
 
 export type SortMode = 'name' | 'recent'
 export type TextSize = 'sm' | 'md' | 'lg'
@@ -227,6 +228,11 @@ export const useStore = create<OrchidState>((set, get) => ({
     if (s.activePath && path !== s.activePath && dirty(s)) {
       const ok = window.confirm('Discard unsaved changes to the current file?')
       if (!ok) return
+    }
+    // PDFs are rendered by the viewer, not read as text.
+    if (isPdfFile(path)) {
+      set({ activePath: path, content: '', savedContent: '', conflict: false, unsupported: false, editMode: false, selected: [] })
+      return
     }
     try {
       const text = await window.orchid.readFile(path)

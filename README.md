@@ -78,7 +78,7 @@ Press Return, then open Orchid normally. You only ever need this once.
 **Create & edit**
 - **New files** (`⌘N`) and **folders** (`⌘⇧N`) — from the menu or the sidebar `+`; code files get syntax highlighting; extension-less files default to `.txt`.
 - **Manage files** — **rename** (or double-click), **duplicate**, **move** by dragging onto a folder, **copy path / relative path**, and **delete to Trash** with **multi-select** — all from right-click.
-- **Light editing** — `⌘E` toggles a CodeMirror editor with a scroll-synced live preview (the cursor lands ready to type); `⌘S` saves. Prompts before losing unsaved edits.
+- **Light editing** — `⌘E` toggles a CodeMirror editor with a scroll-synced live preview (the cursor lands ready to type); `⌘S` saves. Full cut / copy / paste / undo (keyboard **and** right-click), and an Edit menu. Prompts before losing unsaved edits.
 - **Export** — self-contained **HTML** or **PDF** with a customisable header, footer, and page numbers; always rendered light for clean printing and sharing.
 
 **Stay current**
@@ -114,6 +114,8 @@ Orchid follows your system appearance — **Bloom** (light) and **Dusk** (dark) 
 | Save | `⌘S` |
 | Toggle sidebar / contents | `⌘.` / `⌘⌥.` |
 | Keyboard shortcuts | `⌘/` |
+
+**Every shortcut is customisable** — open **Settings** (`⌘,` or the gear in the titlebar), click a command, and press the keys you want. On a Windows-style keyboard you can bind `Ctrl`-based shortcuts (macOS treats `⌘` and `Ctrl` as distinct).
 
 > Tip: drag a folder or file onto the window, right-click a file to reveal/trash it, or ⌘-click several files to delete them together.
 

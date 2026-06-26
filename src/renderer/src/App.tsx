@@ -7,13 +7,15 @@ import ThemePicker from './components/ThemePicker'
 import CommandPalette from './components/CommandPalette'
 import SearchPanel from './components/SearchPanel'
 import ShortcutsPanel from './components/ShortcutsPanel'
+import SettingsPanel from './components/SettingsPanel'
 import DeveloperPanel from './components/DeveloperPanel'
 import UpdateDialog, { type UpdateInfo } from './components/UpdateDialog'
 import PdfDialog, { type PdfOptions } from './components/PdfDialog'
 import FindBar from './components/FindBar'
 import { buildStandaloneHtml } from './markdown/exportDoc'
-import { isMarkdownFile } from './markdown/langs'
+import { isMarkdownFile, isPdfFile } from './markdown/langs'
 import { accentByKey } from './themes'
+import { matchAccelerator } from './lib/accelerator'
 
 function baseName(p: string): string {
   const parts = p.split('/').filter(Boolean)
@@ -36,10 +38,13 @@ export default function App(): JSX.Element {
   const [paletteOpen, setPaletteOpen] = useState(false)
   const [searchOpen, setSearchOpen] = useState(false)
   const [shortcutsOpen, setShortcutsOpen] = useState(false)
+  const [settingsOpen, setSettingsOpen] = useState(false)
   const [developerOpen, setDeveloperOpen] = useState(false)
   const [findOpen, setFindOpen] = useState(false)
   const [update, setUpdate] = useState<UpdateInfo | null>(null)
   const [pdfOpen, setPdfOpen] = useState(false)
+  // Resolved accelerator map, so the fallback key handler honours custom shortcuts.
+  const [shortcutMap, setShortcutMap] = useState<Record<string, string>>({})
 
   // Track the OS appearance.
   useEffect(() => {
@@ -74,6 +79,12 @@ export default function App(): JSX.Element {
     document.documentElement.style.setProperty('--toc-font', px)
   }, [tocTextSize])
 
+  // Load the resolved shortcut map and keep it in sync with remaps.
+  useEffect(() => {
+    void window.orchid.getShortcuts().then((s) => setShortcutMap(s.map))
+    return window.orchid.onShortcutsChanged((s) => setShortcutMap(s.map))
+  }, [])
+
   // Update notifications: always show on a manual check; on the quiet launch
   // check, skip versions the user already dismissed.
   useEffect(() => {
@@ -97,7 +108,8 @@ export default function App(): JSX.Element {
         if (path) void window.orchid.rescan(path)
       }),
       window.orchid.onToggleEdit(() => {
-        if (s().activePath) s().toggleEdit()
+        const ap = s().activePath
+        if (ap && !isPdfFile(ap)) s().toggleEdit()
       }),
       window.orchid.onSave(() => void s().save()),
       window.orchid.onFocusMode(() => s().toggleFullscreen()),
@@ -118,6 +130,10 @@ export default function App(): JSX.Element {
         else useStore.setState({ activePath: null, content: '', savedContent: '', editMode: false, conflict: false })
       }),
       window.orchid.onShortcuts(() => setShortcutsOpen(true)),
+      window.orchid.onSettings(() => setSettingsOpen(true)),
+      window.orchid.onCommandPalette(() => {
+        if (s().folders.length) setPaletteOpen(true)
+      }),
       window.orchid.onDeveloper(() => setDeveloperOpen(true)),
       window.orchid.onSelectFile((path) => {
         const st = useStore.getState()
@@ -178,33 +194,32 @@ export default function App(): JSX.Element {
     })
   }
 
-  // Save on ⌘S even when menu accelerator is intercepted by a focused field.
+  // Fallback key handling for when a focused field swallows the menu accelerator.
+  // Honours the user's custom shortcut map; ⌘F (find-in-preview) stays fixed so
+  // code files keep CodeMirror's own ⌘F.
   useEffect(() => {
     const handler = (e: KeyboardEvent): void => {
-      if ((e.metaKey || e.ctrlKey) && e.key === 's') {
+      if (shortcutMap.save && matchAccelerator(shortcutMap.save, e)) {
         e.preventDefault()
         void useStore.getState().save()
-      } else if ((e.metaKey || e.ctrlKey) && e.key === 'p') {
+      } else if (shortcutMap.commandPalette && matchAccelerator(shortcutMap.commandPalette, e)) {
         e.preventDefault()
         if (useStore.getState().folders.length) setPaletteOpen(true)
-      } else if ((e.metaKey || e.ctrlKey) && e.shiftKey && (e.key === 'f' || e.key === 'F')) {
+      } else if (shortcutMap.searchAll && matchAccelerator(shortcutMap.searchAll, e)) {
         e.preventDefault()
         if (useStore.getState().folders.length) setSearchOpen(true)
-      } else if ((e.metaKey || e.ctrlKey) && !e.shiftKey && (e.key === 'f' || e.key === 'F')) {
+      } else if ((e.metaKey || e.ctrlKey) && !e.shiftKey && !e.altKey && (e.key === 'f' || e.key === 'F')) {
         // ⌘F = find in a rendered markdown preview (code files keep CodeMirror's own ⌘F)
         const st = useStore.getState()
         if (st.activePath && isMarkdownFile(st.activePath) && !st.editMode) {
           e.preventDefault()
           setFindOpen(true)
         }
-      } else if ((e.metaKey || e.ctrlKey) && e.key === '/') {
-        e.preventDefault()
-        setShortcutsOpen(true)
       }
     }
     window.addEventListener('keydown', handler)
     return () => window.removeEventListener('keydown', handler)
-  }, [])
+  }, [shortcutMap])
 
   // Drag-and-drop a folder onto the window.
   useEffect(() => {
@@ -247,6 +262,7 @@ export default function App(): JSX.Element {
 
   const showSidebar = !focusMode
   const anyPanelShown = !focusMode || tocVisible
+  const isPdf = !!activePath && isPdfFile(activePath)
 
   return (
     <div className="app">
@@ -276,7 +292,7 @@ export default function App(): JSX.Element {
             </button>
             <button
               className={editMode ? 'on' : ''}
-              disabled={!activePath}
+              disabled={!activePath || isPdf}
               onClick={() => !editMode && useStore.getState().toggleEdit()}
             >
               Edit
@@ -292,6 +308,14 @@ export default function App(): JSX.Element {
             {anyPanelShown ? '⤢' : '⤡'}
           </button>
           <ThemePicker />
+          <button
+            className="tbtn icon"
+            onClick={() => setSettingsOpen(true)}
+            title="Settings (⌘,)"
+            aria-label="Settings"
+          >
+            ⚙
+          </button>
           <button
             className="tbtn icon"
             onClick={() => setShortcutsOpen(true)}
@@ -331,6 +355,7 @@ export default function App(): JSX.Element {
       <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} />
       <SearchPanel open={searchOpen} onClose={() => setSearchOpen(false)} />
       <ShortcutsPanel open={shortcutsOpen} onClose={() => setShortcutsOpen(false)} />
+      <SettingsPanel open={settingsOpen} onClose={() => setSettingsOpen(false)} />
       <DeveloperPanel open={developerOpen} onClose={() => setDeveloperOpen(false)} />
       <PdfDialog
         open={pdfOpen}

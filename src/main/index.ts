@@ -1,10 +1,12 @@
-import { app, shell, BrowserWindow, ipcMain, dialog, Menu, nativeTheme, protocol, net, screen, clipboard } from 'electron'
+import { app, shell, BrowserWindow, ipcMain, dialog, Menu, nativeTheme, protocol, net, screen, clipboard, crashReporter } from 'electron'
 import { join, resolve, relative, sep, basename, dirname } from 'path'
-import { promises as fs } from 'fs'
+import { promises as fs, existsSync, writeFileSync, unlinkSync } from 'fs'
+import { reportCrash } from './crash-report'
 import { pathToFileURL } from 'url'
 import { scanFolder, TEXT_EXTENSIONS, type MdNode } from './fs-scan'
 import { watchPaths, stopWatching } from './watcher'
 import { cmpVersions } from './version'
+import { SHORTCUT_DEFS, mergeShortcuts, sanitizeOverrides, isValidAccelerator } from './shortcuts'
 
 const TEXT_RE = new RegExp('\\.(' + TEXT_EXTENSIONS.map((e) => e.slice(1)).join('|') + ')$', 'i')
 
@@ -16,6 +18,7 @@ interface WSFolder {
 }
 
 let mainWindow: BrowserWindow | null = null
+let lastRendererReload = 0
 let workspace: WSFolder[] = []
 let currentFiles: string[] = []
 let unsavedChanges = false
@@ -266,6 +269,28 @@ function createWindow(): void {
     return { action: 'deny' }
   })
 
+  // Right-click menu for editable fields / selected text (Electron has none by
+  // default). Items are contextual: paste only in editable fields, copy/cut only
+  // with a selection.
+  mainWindow.webContents.on('context-menu', (_e, params) => {
+    const { editFlags, isEditable, selectionText } = params
+    const hasSelection = selectionText.trim().length > 0
+    const items: Electron.MenuItemConstructorOptions[] = []
+    if (isEditable) {
+      items.push(
+        { role: 'cut', enabled: editFlags.canCut },
+        { role: 'copy', enabled: editFlags.canCopy },
+        { role: 'paste', enabled: editFlags.canPaste },
+        { type: 'separator' },
+        { role: 'selectAll' }
+      )
+    } else if (hasSelection) {
+      items.push({ role: 'copy' }, { type: 'separator' }, { role: 'selectAll' })
+    }
+    if (items.length === 0) return
+    Menu.buildFromTemplate(items).popup({ window: mainWindow ?? undefined })
+  })
+
   // Guard against losing unsaved edits when the window/app closes.
   mainWindow.on('close', (e) => {
     if (!unsavedChanges || forceClose || !mainWindow) return
@@ -293,6 +318,19 @@ function createWindow(): void {
   // (e.g. nativeTheme) don't touch a destroyed window.
   mainWindow.on('closed', () => {
     mainWindow = null
+  })
+
+  // The renderer crashed (gone / OOM / GPU) — report it, then auto-recover by
+  // reloading the window so the user sees a brief flash instead of a dead window.
+  // A 5s guard prevents a reload storm if it crashes again immediately on load.
+  mainWindow.webContents.on('render-process-gone', (_e, details) => {
+    if (details.reason === 'clean-exit') return
+    reportCrash('render-process-gone', `${details.reason} (exitCode ${details.exitCode})`, crashMeta())
+    const now = Date.now()
+    if (windowAlive() && now - lastRendererReload > 5000) {
+      lastRendererReload = now
+      mainWindow!.webContents.reload()
+    }
   })
 
   // In-file find (⌘F) — relay native find results to the renderer's find bar.
@@ -379,6 +417,49 @@ async function checkForUpdates(manual: boolean): Promise<void> {
   }
 }
 
+// ---- Customisable keyboard shortcuts ----
+let shortcutOverrides: Record<string, string> = {}
+
+function shortcutsFile(): string {
+  return join(app.getPath('userData'), 'shortcuts.json')
+}
+
+async function loadShortcutOverrides(): Promise<void> {
+  try {
+    shortcutOverrides = sanitizeOverrides(JSON.parse(await fs.readFile(shortcutsFile(), 'utf8')))
+  } catch {
+    shortcutOverrides = {}
+  }
+}
+
+async function saveShortcutOverrides(): Promise<void> {
+  try {
+    await fs.writeFile(shortcutsFile(), JSON.stringify(shortcutOverrides, null, 2), 'utf8')
+  } catch {
+    /* best-effort */
+  }
+}
+
+/** Resolved accelerator for a command id (override if valid, else default). */
+function accel(id: string): string {
+  return mergeShortcuts(shortcutOverrides)[id]
+}
+
+function resolvedShortcuts(): { defs: typeof SHORTCUT_DEFS; map: Record<string, string> } {
+  return { defs: SHORTCUT_DEFS, map: mergeShortcuts(shortcutOverrides) }
+}
+
+/** Rebuild the application menu; on any failure (e.g. a bad accelerator) reset to defaults. */
+function safeBuildMenu(): void {
+  try {
+    buildMenu()
+  } catch {
+    shortcutOverrides = {}
+    void saveShortcutOverrides()
+    buildMenu()
+  }
+}
+
 function buildMenu(): void {
   const template: Electron.MenuItemConstructorOptions[] = [
     {
@@ -386,6 +467,8 @@ function buildMenu(): void {
       submenu: [
         { role: 'about' },
         { label: 'Check for Updates…', click: () => void checkForUpdates(true) },
+        { type: 'separator' },
+        { label: 'Settings…', accelerator: 'CmdOrCtrl+,', click: () => sendToUi('cmd:settings') },
         { type: 'separator' },
         { role: 'hide' },
         { role: 'hideOthers' },
@@ -397,29 +480,48 @@ function buildMenu(): void {
     {
       label: 'File',
       submenu: [
-        { label: 'New File…', accelerator: 'CmdOrCtrl+N', click: () => void newFileFlow() },
-        { label: 'New Folder…', accelerator: 'CmdOrCtrl+Shift+N', click: () => void newFolderFlow() },
+        { label: 'New File…', accelerator: accel('newFile'), click: () => void newFileFlow() },
+        { label: 'New Folder…', accelerator: accel('newFolder'), click: () => void newFolderFlow() },
         { type: 'separator' },
-        { label: 'Open…', accelerator: 'CmdOrCtrl+O', click: () => openDialog() },
-        { label: 'Add Folder to Workspace…', accelerator: 'CmdOrCtrl+Shift+O', click: () => openFolderDialog(true) },
+        { label: 'Open…', accelerator: accel('open'), click: () => openDialog() },
+        { label: 'Add Folder to Workspace…', accelerator: accel('addFolder'), click: () => openFolderDialog(true) },
         { type: 'separator' },
-        { label: 'Close File', accelerator: 'CmdOrCtrl+W', click: () => sendToUi('cmd:close-file') },
-        { label: 'Refresh', accelerator: 'CmdOrCtrl+R', click: () => void refreshAll() },
+        { label: 'Jump to File…', accelerator: accel('commandPalette'), click: () => sendToUi('cmd:command-palette') },
+        { label: 'Close File', accelerator: accel('closeFile'), click: () => sendToUi('cmd:close-file') },
+        { label: 'Refresh', accelerator: accel('refresh'), click: () => void refreshAll() },
         { type: 'separator' },
-        { label: 'Toggle Edit Mode', accelerator: 'CmdOrCtrl+E', click: () => sendToUi('cmd:toggle-edit') },
-        { label: 'Save', accelerator: 'CmdOrCtrl+S', click: () => sendToUi('cmd:save') },
+        { label: 'Toggle Edit Mode', accelerator: accel('toggleEdit'), click: () => sendToUi('cmd:toggle-edit') },
+        { label: 'Save', accelerator: accel('save'), click: () => sendToUi('cmd:save') },
         { type: 'separator' },
-        { label: 'Find in Files…', accelerator: 'CmdOrCtrl+Shift+F', click: () => sendToUi('cmd:search') },
+        { label: 'Find in Files…', accelerator: accel('searchAll'), click: () => sendToUi('cmd:search') },
         { type: 'separator' },
         { label: 'Export as HTML…', click: () => sendToUi('cmd:export-html') },
         { label: 'Export as PDF…', click: () => sendToUi('cmd:export-pdf') }
       ]
     },
     {
+      label: 'Edit',
+      submenu: [
+        // Undo/redo route to CodeMirror — Electron's native execCommand undo
+        // doesn't drive CodeMirror 6's own history.
+        { label: 'Undo', accelerator: accel('undo'), click: () => sendToUi('cmd:edit-undo') },
+        { label: 'Redo', accelerator: accel('redo'), click: () => sendToUi('cmd:edit-redo') },
+        { type: 'separator' },
+        // Native clipboard roles act on the focused editable element (incl. the editor).
+        { role: 'cut' },
+        { role: 'copy' },
+        { role: 'paste' },
+        { role: 'pasteAndMatchStyle' },
+        { role: 'delete' },
+        { type: 'separator' },
+        { role: 'selectAll' }
+      ]
+    },
+    {
       label: 'View',
       submenu: [
-        { label: 'Toggle Sidebar', accelerator: 'CmdOrCtrl+.', click: () => sendToUi('cmd:focus-mode') },
-        { label: 'Toggle Table of Contents', accelerator: 'CmdOrCtrl+Alt+.', click: () => sendToUi('cmd:toggle-toc') },
+        { label: 'Toggle Sidebar', accelerator: accel('toggleSidebar'), click: () => sendToUi('cmd:focus-mode') },
+        { label: 'Toggle Table of Contents', accelerator: accel('toggleToc'), click: () => sendToUi('cmd:toggle-toc') },
         { type: 'separator' },
         { role: 'resetZoom' },
         { role: 'zoomIn' },
@@ -436,7 +538,7 @@ function buildMenu(): void {
     {
       role: 'help',
       submenu: [
-        { label: 'Keyboard Shortcuts', accelerator: 'CmdOrCtrl+/', click: () => sendToUi('cmd:shortcuts') },
+        { label: 'Keyboard Shortcuts', accelerator: accel('shortcuts'), click: () => sendToUi('cmd:shortcuts') },
         { label: 'Contributing & Developer Info', click: () => sendToUi('cmd:developer') },
         { type: 'separator' },
         { label: 'View Project on GitHub', click: () => shell.openExternal('https://github.com/avnat/orchid') },
@@ -458,7 +560,61 @@ function buildMenu(): void {
   Menu.setApplicationMenu(Menu.buildFromTemplate(template))
 }
 
-app.whenReady().then(() => {
+// Collect native crashes locally (no upload — we read them on next launch).
+crashReporter.start({ uploadToServer: false })
+
+function crashMeta(): { version: string; os: string; arch: string } {
+  return { version: app.getVersion(), os: process.getSystemVersion(), arch: process.arch }
+}
+
+// Last line of defence against "Orchid quit unexpectedly": a stray error in the
+// main process (a background timer, an IPC handler, a rejected promise) would
+// otherwise take the whole app down. Report it and keep running.
+process.on('uncaughtException', (err) => {
+  console.error('[main] uncaught exception:', err)
+  reportCrash('uncaughtException', err?.stack ?? String(err), crashMeta())
+})
+process.on('unhandledRejection', (reason) => {
+  console.error('[main] unhandled rejection:', reason)
+  const detail = reason instanceof Error ? (reason.stack ?? reason.message) : String(reason)
+  reportCrash('unhandledRejection', detail, crashMeta())
+})
+
+// "Did the last run exit cleanly?" sentinel — catches hard native crashes (which
+// can't run JS at crash time) by noticing the marker survived to the next launch.
+function crashSentinel(): string {
+  return join(app.getPath('userData'), '.running')
+}
+function armSentinel(): void {
+  try {
+    if (existsSync(crashSentinel())) {
+      reportCrash('unclean-exit', 'Previous session did not exit cleanly (possible native crash).', crashMeta())
+    }
+    writeFileSync(crashSentinel(), String(Date.now()), 'utf8')
+  } catch {
+    /* ignore */
+  }
+}
+app.on('will-quit', () => {
+  try {
+    unlinkSync(crashSentinel())
+  } catch {
+    /* ignore */
+  }
+})
+app.on('child-process-gone', (_e, d) => {
+  if (d.reason !== 'clean-exit') reportCrash('child-process-gone', `${d.type}: ${d.reason}`, crashMeta())
+})
+
+app.whenReady().then(async () => {
+  armSentinel()
+  await loadShortcutOverrides()
+  app.setAboutPanelOptions({
+    applicationName: 'Orchid',
+    applicationVersion: app.getVersion(),
+    copyright: '© 2026 Avnee · MIT',
+    credits: 'A calm, native macOS reader for the Markdown your tools generate.'
+  })
   protocol.handle('orchid-asset', (request) => {
     const url = new URL(request.url)
     const filePath = decodeURIComponent(url.pathname.replace(/^\//, ''))
@@ -479,7 +635,7 @@ app.whenReady().then(() => {
     }
   }
 
-  buildMenu()
+  safeBuildMenu()
   createWindow()
 
   // One quiet update check shortly after launch (the renderer ignores it if the
@@ -639,6 +795,13 @@ ipcMain.handle('fs:write', async (_e, filePath: string, content: string) => {
   return true
 })
 
+// Raw bytes for binary viewers (e.g. the PDF reader). Returned as a Uint8Array.
+ipcMain.handle('fs:readBinary', async (_e, filePath: string) => {
+  if (!withinWorkspace(filePath)) throw new Error('Path outside the workspace')
+  const buf = await fs.readFile(filePath)
+  return new Uint8Array(buf)
+})
+
 ipcMain.handle('fs:reveal', async (_e, filePath: string) => {
   if (!withinWorkspace(filePath)) return
   shell.showItemInFolder(filePath)
@@ -780,6 +943,37 @@ ipcMain.handle('update:check', async () => checkForUpdates(true))
 ipcMain.handle('app:new-file', async () => newFileFlow())
 
 ipcMain.handle('theme:get', async () => ({ shouldUseDarkColors: nativeTheme.shouldUseDarkColors }))
+
+ipcMain.handle('app:getVersion', async () => app.getVersion())
+
+// ---- Shortcuts IPC ----
+ipcMain.handle('shortcuts:get', async () => resolvedShortcuts())
+
+ipcMain.handle('shortcuts:set', async (_e, id: string, accelerator: string | null) => {
+  const def = SHORTCUT_DEFS.find((d) => d.id === id)
+  if (!def) return { ok: false, error: 'Unknown command' }
+  if (accelerator === null || accelerator === def.defaultAccelerator) {
+    delete shortcutOverrides[id] // back to default
+  } else if (isValidAccelerator(accelerator)) {
+    shortcutOverrides[id] = accelerator
+  } else {
+    return { ok: false, error: 'Invalid shortcut' }
+  }
+  await saveShortcutOverrides()
+  safeBuildMenu()
+  const resolved = resolvedShortcuts()
+  sendToUi('shortcuts:changed', resolved)
+  return { ok: true, ...resolved }
+})
+
+ipcMain.handle('shortcuts:reset', async () => {
+  shortcutOverrides = {}
+  await saveShortcutOverrides()
+  safeBuildMenu()
+  const resolved = resolvedShortcuts()
+  sendToUi('shortcuts:changed', resolved)
+  return resolved
+})
 
 // ---- In-file find (⌘F) ----
 ipcMain.handle('find:start', (_e, query: string, opts: { forward?: boolean; findNext?: boolean }) => {

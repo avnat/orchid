@@ -2,6 +2,23 @@
 
 All notable changes to **Orchid**. Newest first. Built for macOS (Apple Silicon).
 
+## 1.3.0 — 2026-06-26
+
+**Added**
+- **PDF reading.** Open a `.pdf` and read it right inside Orchid — rendered in the app's own calm viewer (not the grey system one), with fit-to-width, zoom, and selectable text.
+- **Customisable keyboard shortcuts.** A new **Settings** panel (⌘, or the gear in the titlebar) lists every command — click a shortcut and press the keys you want. Especially handy on a **Windows-style keyboard**, where you can bind `Ctrl`-based shortcuts (macOS treats `⌘` and `Ctrl` as different keys). Reset any one shortcut, or all of them, to the defaults.
+- **A proper Edit menu** — Undo, Redo, Cut, Copy, Paste, Paste and Match Style, and Select All, so the standard editing keyboard shortcuts work everywhere.
+- **Right-click in the editor** — a context menu with Cut / Copy / Paste / Select All (and Copy on selected preview text).
+- **Collapse / Expand all folders** — a one-click toggle in the sidebar toolbar.
+- **Version everywhere** — shown in **Orchid → About Orchid**, on the launch screen, and in Settings.
+
+**Fixed**
+- **The editor now supports cut, copy, and paste** — both the keyboard shortcuts (`⌘X` / `⌘C` / `⌘V`) and the right-click menu. Undo/redo (`⌘Z` / `⌘⇧Z`) drive the editor's own history.
+- **New empty folders show up immediately** — creating a folder inside a folder no longer waits for files before appearing.
+
+**Reliability**
+- **Fewer unexpected quits.** A stray main-process error is now caught instead of taking the app down, a crashed renderer auto-reloads itself, and crashes are recorded so they can be diagnosed (version + macOS version), rather than failing silently.
+
 ## 1.2.0 — 2026-06-25
 
 **Changed**
