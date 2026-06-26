@@ -68,10 +68,12 @@ Press Return, then open Orchid normally. You only ever need this once.
 - **Keyboard navigation** — with the sidebar focused, `↑`/`↓` move through files; `⇧↑`/`⇧↓` and `⇧-click` extend a multi-file selection.
 - **Sort** — a compact menu: **Name (A–Z)** or **Recently edited**; every file shows a relative timestamp.
 - **Live** — new and changed files appear automatically; a **Refresh** button re-scans on demand.
+- **Collapse / expand all** — one click in the sidebar toolbar to fold every folder, or open them all back up.
 - **Find fast** — `⌘P` fuzzy switcher · `⌘⇧F` full-text search across folders · `⌘F` find-in-file · a scroll-spy table of contents with adjustable text size.
 
 **Read**
 - **Rich preview** — GFM tables, task lists, syntax-highlighted code, callouts, images, a frontmatter header, **KaTeX math**, and **Mermaid diagrams**.
+- **PDF reading** — open a `.pdf` and read it right in Orchid's own calm viewer (not the grey system one): fit-to-width, zoom, selectable text, and find (`⌘F`) across the whole document.
 - **Built for focus** — refined typography; resizable panels; collapse the sidebar or contents rail right from the divider (a circular handle appears on hover), or one **focus button** to hide everything. A **Reading / Editing** badge always shows your mode.
 - **Themes** — light (*Bloom*) / dark (*Dusk*) following the system, **13 accent presets**, a **bring-your-own custom colour**, and adjustable sidebar & index text sizes.
 
@@ -83,6 +85,8 @@ Press Return, then open Orchid normally. You only ever need this once.
 
 **Stay current**
 - **In-app updates** — Orchid checks for new releases and shows an in-app card when one's out (**Check for Updates…** in the app menu); one click to download.
+- **Know your version** — shown in **Orchid → About Orchid**, on the launch screen, and in Settings.
+- **Resilient** — a stray error no longer takes the app down (a crashed view quietly reloads), and crashes are recorded so they can be diagnosed.
 
 <div align="center">
 
