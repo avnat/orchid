@@ -1,7 +1,9 @@
 import { app, shell, BrowserWindow, ipcMain, dialog, Menu, nativeTheme, protocol, net, screen, clipboard, crashReporter } from 'electron'
 import { join, resolve, relative, sep, basename, dirname } from 'path'
-import { promises as fs, existsSync, writeFileSync, readFileSync, unlinkSync, readdirSync, statSync } from 'fs'
+import { promises as fs, writeFileSync, readFileSync, readdirSync, statSync } from 'fs'
+import { homedir } from 'os'
 import { reportCrash } from './crash-report'
+import { summarizeCrashIps } from './crash-summary'
 import { pathToFileURL } from 'url'
 import { scanFolder, TEXT_EXTENSIONS, type MdNode } from './fs-scan'
 import { watchPaths, stopWatching } from './watcher'
@@ -580,81 +582,65 @@ process.on('unhandledRejection', (reason) => {
   reportCrash('unhandledRejection', detail, crashMeta())
 })
 
-// Native-crash detection. A hard crash can't run JS at crash time, so we notice
-// it on the *next* launch — but only report it when there's an actual crash dump
-// as evidence. A missing marker alone is ambiguous (force-quit, OS shutdown, or
-// `kill` look identical to a crash), so the marker is cleared on every known exit
-// path below and the dump is what confirms a real crash. This keeps the crash
-// log trustworthy instead of flooding it with false positives.
-function crashSentinel(): string {
-  return join(app.getPath('userData'), '.running')
-}
-function clearSentinel(): void {
-  try {
-    unlinkSync(crashSentinel())
-  } catch {
-    /* already gone */
-  }
-}
-/** True if a crash dump was written since `sinceMs` (real native crash evidence). */
-function crashDumpSince(sinceMs: number): boolean {
-  try {
-    const base = app.getPath('crashDumps')
-    for (const dir of [base, join(base, 'completed'), join(base, 'pending')]) {
-      let files: string[]
-      try {
-        files = readdirSync(dir)
-      } catch {
-        continue
-      }
-      for (const f of files) {
-        if (!f.endsWith('.dmp')) continue
-        try {
-          if (statSync(join(dir, f)).mtimeMs >= sinceMs - 1000) return true
-        } catch {
-          /* ignore */
-        }
-      }
-    }
-  } catch {
-    /* ignore */
-  }
-  return false
-}
-function armSentinel(): void {
-  try {
-    const f = crashSentinel()
-    if (existsSync(f)) {
-      const since = Number(readFileSync(f, 'utf8')) || 0
-      // Only report if a crash dump backs it up — otherwise it was a force-quit
-      // / OS kill, not a crash.
-      if (crashDumpSince(since)) {
-        reportCrash('native-crash', 'Previous session crashed (native crash dump found).', crashMeta())
-      }
-    }
-    writeFileSync(f, String(Date.now()), 'utf8')
-  } catch {
-    /* ignore */
-  }
-}
-app.on('will-quit', clearSentinel)
-app.on('before-quit', clearSentinel)
-// SIGTERM/SIGINT (e.g. `kill`, or the OS asking us to quit) are clean exits, not
-// crashes — clear the marker so they aren't mistaken for one next launch.
-process.on('SIGTERM', () => {
-  clearSentinel()
-  process.exit(0)
-})
-process.on('SIGINT', () => {
-  clearSentinel()
-  process.exit(0)
-})
 app.on('child-process-gone', (_e, d) => {
   if (d.reason !== 'clean-exit') reportCrash('child-process-gone', `${d.type}: ${d.reason}`, crashMeta())
 })
 
+// Native crashes (e.g. a hard V8/Chromium abort in the main process) can't run
+// JS at crash time, so the handlers above never see them. macOS, however, writes
+// a crash log for every one of them — the same .ips Apple's "quit unexpectedly"
+// dialog produces. On launch we read any new Orchid crash logs and report a
+// summary. This is ground truth: it catches crashes Crashpad misses, with no
+// false positives (only real, OS-recorded crashes have a file).
+function crashSeenFile(): string {
+  return join(app.getPath('userData'), 'crash-seen.json')
+}
+function reportDiagnosticCrashes(): void {
+  try {
+    const dir = process.env['ORCHID_CRASH_DIR'] || join(homedir(), 'Library', 'Logs', 'DiagnosticReports')
+    let seen = 0
+    try {
+      seen = Number((JSON.parse(readFileSync(crashSeenFile(), 'utf8')) as { seen?: number }).seen) || 0
+    } catch {
+      /* first run */
+    }
+    // First run: only look back a day so we don't dump a user's entire history.
+    const cutoff = seen || Date.now() - 24 * 60 * 60 * 1000
+    let files: string[]
+    try {
+      files = readdirSync(dir)
+    } catch {
+      return // no crash-log directory
+    }
+    let maxMtime = seen
+    for (const f of files) {
+      if (!/^Orchid.*\.(ips|crash|panic)$/i.test(f)) continue
+      let mtime = 0
+      try {
+        mtime = statSync(join(dir, f)).mtimeMs
+      } catch {
+        continue
+      }
+      if (mtime > maxMtime) maxMtime = mtime
+      if (mtime <= cutoff) continue
+      try {
+        reportCrash('native-crash', summarizeCrashIps(readFileSync(join(dir, f), 'utf8')), crashMeta())
+      } catch {
+        /* ignore a single unreadable report */
+      }
+    }
+    try {
+      writeFileSync(crashSeenFile(), JSON.stringify({ seen: Math.max(maxMtime, seen || Date.now()) }), 'utf8')
+    } catch {
+      /* best-effort */
+    }
+  } catch {
+    /* crash reporting must never break startup */
+  }
+}
+
 app.whenReady().then(async () => {
-  armSentinel()
+  reportDiagnosticCrashes()
   await loadShortcutOverrides()
   app.setAboutPanelOptions({
     applicationName: 'Orchid',

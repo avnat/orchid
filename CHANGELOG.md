@@ -2,6 +2,11 @@
 
 All notable changes to **Orchid**. Newest first. Built for macOS (Apple Silicon).
 
+## 1.3.2 — 2026-06-30
+
+**Reliability**
+- **Native crashes are now actually captured.** Previously a hard crash in the main process (the "Orchid quit unexpectedly" kind) could slip past crash reporting. On the next launch Orchid now reads macOS's own crash logs and reports a summary (exception, faulting thread, top frames, version, OS) — the ground-truth signal for every crash the OS records.
+
 ## 1.3.1 — 2026-06-26
 
 **Fixed**
