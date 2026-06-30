@@ -24,6 +24,7 @@ export default defineConfig({
         'src/main/fs-scan.ts',
         'src/main/version.ts',
         'src/main/shortcuts.ts',
+        'src/main/crash-summary.ts',
         'src/renderer/src/themes.ts',
         'src/renderer/src/store/useStore.ts',
         'src/renderer/src/markdown/langs.ts',
