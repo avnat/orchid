@@ -110,7 +110,8 @@ export default function MainPane(): JSX.Element {
         {conflict && <ConflictBanner />}
         <div className="codeview">
           <Suspense fallback={<div className="editor-loading" />}>
-            <Editor dark={dark} language={codeLang} readOnly={!editMode} showLineNumbers />
+            {/* keyed by path so each tab gets its own editor (and undo history) */}
+            <Editor key={activePath} dark={dark} language={codeLang} readOnly={!editMode} showLineNumbers />
           </Suspense>
         </div>
       </div>
@@ -128,7 +129,7 @@ export default function MainPane(): JSX.Element {
         >
           <div className="pane editor-pane">
             <Suspense fallback={<div className="editor-loading" />}>
-              <Editor dark={dark} onScrollFraction={syncPreview} />
+              <Editor key={activePath} dark={dark} onScrollFraction={syncPreview} />
             </Suspense>
           </div>
           <div className="split-divider" onMouseDown={startSplitDrag} aria-hidden="true" />

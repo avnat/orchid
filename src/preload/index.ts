@@ -82,6 +82,9 @@ const api = {
     ipcRenderer.invoke('shortcuts:reset'),
   setDirty: (dirty: boolean): void => ipcRenderer.send('win:dirty', dirty),
   confirmClose: (): void => ipcRenderer.send('win:ready-to-close'),
+  newWindow: (): Promise<void> => ipcRenderer.invoke('app:new-window'),
+  closeWindow: (): void => ipcRenderer.send('win:close'),
+  getWorkspace: (): Promise<{ folders: WorkspaceFolder[] }> => ipcRenderer.invoke('workspace:get'),
 
   // events (return an unsubscribe fn)
   onWorkspaceChanged: (cb: (p: { folders: WorkspaceFolder[]; select?: string }) => void) =>
@@ -103,6 +106,9 @@ const api = {
   onShortcuts: (cb: () => void) => on('cmd:shortcuts', cb),
   onSettings: (cb: () => void) => on('cmd:settings', cb),
   onCommandPalette: (cb: () => void) => on('cmd:command-palette', cb),
+  onNextTab: (cb: () => void) => on('cmd:next-tab', cb),
+  onPrevTab: (cb: () => void) => on('cmd:prev-tab', cb),
+  onOpenInNewTab: (cb: (path: string) => void) => on('menu:open-new-tab', cb),
   onEditUndo: (cb: () => void) => on('cmd:edit-undo', cb),
   onEditRedo: (cb: () => void) => on('cmd:edit-redo', cb),
   onShortcutsChanged: (cb: (p: { defs: ShortcutDef[]; map: Record<string, string> }) => void) =>

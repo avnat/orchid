@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useStore } from './store/useStore'
 import Sidebar from './components/Sidebar'
 import MainPane from './components/MainPane'
+import TabBar from './components/TabBar'
 import EmptyState from './components/EmptyState'
 import ThemePicker from './components/ThemePicker'
 import CommandPalette from './components/CommandPalette'
@@ -95,6 +96,17 @@ export default function App(): JSX.Element {
     })
   }, [])
 
+  // A fresh renderer (first load of a new window, or a crash-recovery reload)
+  // pulls the workspace its window already has — pushes sent before the load
+  // are lost otherwise.
+  useEffect(() => {
+    void window.orchid.getWorkspace().then(({ folders }) => {
+      if (folders.length && !useStore.getState().folders.length) {
+        useStore.getState().setWorkspace(folders)
+      }
+    })
+  }, [])
+
   // IPC wiring.
   useEffect(() => {
     const s = useStore.getState
@@ -119,16 +131,21 @@ export default function App(): JSX.Element {
       }),
       window.orchid.onExportHtml(() => void doExport('html')),
       window.orchid.onExportPdf(() => setPdfOpen(true)),
-      // ⌘W — close the open file (a single-file workspace closes entirely → launch).
+      // ⌘W — close the active tab; with no tabs left it closes the window.
+      // A single-file workspace entry leaves the sidebar with its tab.
       window.orchid.onCloseFile(() => {
         const st = s()
         const ap = st.activePath
-        if (!ap) return
-        if (st.content !== st.savedContent && !window.confirm('Discard unsaved changes and close this file?')) return
+        if (!ap) {
+          window.orchid.closeWindow()
+          return
+        }
         const folder = st.folders.find((f) => ap === f.root || ap.startsWith(f.root + '/'))
-        if (folder?.isFile) void window.orchid.closeFolder(folder.root)
-        else useStore.setState({ activePath: null, content: '', savedContent: '', editMode: false, conflict: false })
+        if (st.closeTab(ap) && folder?.isFile) void window.orchid.closeFolder(folder.root)
       }),
+      window.orchid.onNextTab(() => s().cycleTab(1)),
+      window.orchid.onPrevTab(() => s().cycleTab(-1)),
+      window.orchid.onOpenInNewTab((path) => void s().selectFile(path, { newTab: true })),
       window.orchid.onShortcuts(() => setShortcutsOpen(true)),
       window.orchid.onSettings(() => setSettingsOpen(true)),
       window.orchid.onCommandPalette(() => {
@@ -142,20 +159,23 @@ export default function App(): JSX.Element {
       }),
       // A brand-new file (created with no folder open) opens ready to type.
       window.orchid.onNewFileCreated(() => s().setEditMode(true)),
-      // Save-and-close: main asked us to persist before quitting.
+      // Save-and-close: main asked us to persist every dirty tab before closing.
       window.orchid.onSaveAndClose(async () => {
-        await useStore.getState().save()
+        await useStore.getState().saveAll()
         window.orchid.confirmClose()
       })
     ]
     return () => offs.forEach((off) => off())
   }, [])
 
-  // Keep the main process informed of unsaved-changes state (for the quit prompt).
+  // Keep the main process informed of unsaved-changes state — in ANY tab —
+  // for the window-close prompt.
   useEffect(() => {
     let last = false
     return useStore.subscribe((s) => {
-      const d = s.content !== s.savedContent
+      const d =
+        s.content !== s.savedContent ||
+        Object.values(s.stash).some((t) => t.content !== t.savedContent)
       if (d !== last) {
         last = d
         window.orchid.setDirty(d)
@@ -208,6 +228,16 @@ export default function App(): JSX.Element {
       } else if (shortcutMap.searchAll && matchAccelerator(shortcutMap.searchAll, e)) {
         e.preventDefault()
         if (useStore.getState().folders.length) setSearchOpen(true)
+      } else if ((e.metaKey || e.ctrlKey) && !e.shiftKey && !e.altKey && e.key >= '1' && e.key <= '9') {
+        // ⌘1–⌘9 jump to the Nth tab (⌘9 = the last tab, browser-style).
+        const st = useStore.getState()
+        if (st.tabs.length) {
+          const i = e.key === '9' ? st.tabs.length - 1 : Number(e.key) - 1
+          if (i < st.tabs.length) {
+            e.preventDefault()
+            void st.selectFile(st.tabs[i])
+          }
+        }
       } else if ((e.metaKey || e.ctrlKey) && !e.shiftKey && !e.altKey && (e.key === 'f' || e.key === 'F')) {
         // ⌘F = find in a rendered markdown preview or a PDF (code files keep
         // CodeMirror's own ⌘F).
@@ -337,7 +367,10 @@ export default function App(): JSX.Element {
           style={{ gridTemplateColumns: showSidebar ? `${sidebarWidth}px 1fr` : '1fr' }}
         >
           {showSidebar && <Sidebar />}
-          <MainPane />
+          <div className="main-col">
+            <TabBar />
+            <MainPane />
+          </div>
           {focusMode && (
             <div className="reveal-divider left">
               <button

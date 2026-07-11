@@ -19,26 +19,64 @@ interface WSFolder {
   isFile?: boolean
 }
 
-let mainWindow: BrowserWindow | null = null
-let lastRendererReload = 0
-let workspace: WSFolder[] = []
-let currentFiles: string[] = []
-let unsavedChanges = false
-let forceClose = false
+// Every window carries its own workspace, watcher, and close-guard state.
+interface WinState {
+  win: BrowserWindow
+  workspace: WSFolder[]
+  unsavedChanges: boolean
+  forceClose: boolean
+  lastRendererReload: number
+}
+
+const winStates = new Map<number, WinState>()
+
+function stateFor(win: BrowserWindow | null | undefined): WinState | null {
+  return win ? (winStates.get(win.id) ?? null) : null
+}
+
+function stateFromEvent(e: { sender: Electron.WebContents }): WinState | null {
+  return stateFor(BrowserWindow.fromWebContents(e.sender))
+}
+
+/** The window a menu action should act on: the focused one, else any open one. */
+function focusedState(): WinState | null {
+  const focused = stateFor(BrowserWindow.getFocusedWindow())
+  if (focused) return focused
+  const first = winStates.values().next()
+  return first.done ? null : first.value
+}
+
+/** A window for a menu action, creating one (and waiting for its renderer) if none exist. */
+async function ensureWindow(): Promise<WinState> {
+  const st = focusedState()
+  if (st) return st
+  const win = createWindow()
+  await new Promise<void>((r) => win.webContents.once('did-finish-load', () => r()))
+  return stateFor(win)!
+}
 
 /** The window is present and not torn down — safe to message or parent a dialog. */
-function windowAlive(): boolean {
-  return !!mainWindow && !mainWindow.isDestroyed() && !mainWindow.webContents.isDestroyed()
+function windowAlive(st: WinState | null): st is WinState {
+  return !!st && !st.win.isDestroyed() && !st.win.webContents.isDestroyed()
 }
 
 /**
- * Send an IPC message to the renderer only if the window is alive. Background and
+ * Send an IPC message to a window's renderer only if it is alive. Background and
  * async callers (file watcher, theme changes, update checks, menu actions with no
- * window) can fire after the window is gone — this prevents "Object has been
+ * window) can fire after a window is gone — this prevents "Object has been
  * destroyed" crashes in the main process.
  */
-function sendToUi(channel: string, payload?: unknown): void {
-  if (windowAlive()) mainWindow!.webContents.send(channel, payload)
+function sendToWin(st: WinState | null, channel: string, payload?: unknown): void {
+  if (windowAlive(st)) st.win.webContents.send(channel, payload)
+}
+
+function sendToFocused(channel: string, payload?: unknown): void {
+  sendToWin(focusedState(), channel, payload)
+}
+
+/** Window-independent notifications (theme, shortcut remaps) go to every window. */
+function broadcast(channel: string, payload?: unknown): void {
+  for (const st of winStates.values()) sendToWin(st, channel, payload)
 }
 
 function flattenFiles(nodes: MdNode[], out: string[] = []): string[] {
@@ -55,69 +93,85 @@ protocol.registerSchemesAsPrivileged([
   { scheme: 'orchid-asset', privileges: { standard: true, secure: true, supportFetchAPI: true, stream: true } }
 ])
 
-/** True if `target` lives inside any open workspace folder. */
-function withinWorkspace(target: string): boolean {
+/** True if `target` lives inside any open workspace folder of `st`'s window. */
+function withinWorkspace(st: WinState | null, target: string): boolean {
+  if (!st) return false
   const r = resolve(target)
-  return workspace.some((f) => {
+  return st.workspace.some((f) => {
     const root = resolve(f.root)
     return r === root || r.startsWith(root + sep)
   })
 }
 
+/** True if `target` is inside any window's workspace (for window-less callers like the asset protocol). */
+function withinAnyWorkspace(target: string): boolean {
+  for (const st of winStates.values()) if (withinWorkspace(st, target)) return true
+  return false
+}
+
 // ---- Workspace ----
-function emitWorkspace(select?: string): void {
-  currentFiles = workspace.flatMap((f) => flattenFiles(f.tree))
-  sendToUi('workspace:changed', { folders: workspace, select })
-  rewatch()
+function emitWorkspace(st: WinState, select?: string): void {
+  sendToWin(st, 'workspace:changed', { folders: st.workspace, select })
+  rewatch(st)
 }
 
-function rewatch(): void {
-  const paths = workspace.map((f) => (f.isFile && f.tree[0] ? f.tree[0].path : f.root))
-  watchPaths(paths, mainWindow)
+function rewatch(st: WinState): void {
+  const paths = st.workspace.map((f) => (f.isFile && f.tree[0] ? f.tree[0].path : f.root))
+  watchPaths(paths, st.win)
 }
 
-async function openFolder(folderPath: string, add = false): Promise<void> {
+async function openFolder(st: WinState, folderPath: string, add = false): Promise<void> {
   const tree = await scanFolder(folderPath)
   const entry: WSFolder = { root: folderPath, name: basename(folderPath) || folderPath, tree }
   if (add) {
-    const i = workspace.findIndex((f) => f.root === folderPath)
-    if (i >= 0) workspace[i] = entry
-    else workspace.push(entry)
+    const i = st.workspace.findIndex((f) => f.root === folderPath)
+    if (i >= 0) st.workspace[i] = entry
+    else st.workspace.push(entry)
   } else {
-    workspace = [entry]
+    st.workspace = [entry]
   }
-  emitWorkspace()
+  emitWorkspace(st)
 }
 
-async function openFile(filePath: string): Promise<void> {
-  const dir = dirname(filePath)
-  let mtimeMs = 0
-  try {
-    mtimeMs = (await fs.stat(filePath)).mtimeMs
-  } catch {
-    /* ignore */
+/**
+ * Open a single file. If it already lives inside the window's workspace, just
+ * select it (a new tab). Otherwise add it as a single-file workspace entry —
+ * open folders and their tabs stay put.
+ */
+async function openFile(st: WinState, filePath: string): Promise<void> {
+  if (!withinWorkspace(st, filePath)) {
+    const dir = dirname(filePath)
+    let mtimeMs = 0
+    try {
+      mtimeMs = (await fs.stat(filePath)).mtimeMs
+    } catch {
+      /* ignore */
+    }
+    const node: MdNode = {
+      name: basename(filePath),
+      path: filePath,
+      relPath: basename(filePath),
+      type: 'file',
+      mtimeMs
+    }
+    const entry: WSFolder = { root: dir, name: basename(filePath), tree: [node], isFile: true }
+    const i = st.workspace.findIndex((f) => f.root === dir && f.isFile)
+    if (i >= 0) st.workspace[i] = entry
+    else st.workspace.push(entry)
   }
-  const node: MdNode = {
-    name: basename(filePath),
-    path: filePath,
-    relPath: basename(filePath),
-    type: 'file',
-    mtimeMs
-  }
-  workspace = [{ root: dir, name: basename(filePath), tree: [node], isFile: true }]
-  emitWorkspace(filePath)
+  emitWorkspace(st, filePath)
 }
 
-function closeFolder(root: string): void {
-  workspace = workspace.filter((f) => f.root !== root)
-  emitWorkspace()
+function closeFolder(st: WinState, root: string): void {
+  st.workspace = st.workspace.filter((f) => f.root !== root)
+  emitWorkspace(st)
 }
 
-async function rescanFolder(changedPath: string): Promise<void> {
-  const f = workspace.find((w) => !w.isFile && (changedPath === w.root || changedPath.startsWith(w.root + sep)))
+async function rescanFolder(st: WinState, changedPath: string): Promise<void> {
+  const f = st.workspace.find((w) => !w.isFile && (changedPath === w.root || changedPath.startsWith(w.root + sep)))
   if (!f) return
   f.tree = await scanFolder(f.root)
-  emitWorkspace()
+  emitWorkspace(st)
 }
 
 /**
@@ -125,9 +179,9 @@ async function rescanFolder(changedPath: string): Promise<void> {
  * shows immediately — independent of the file watcher. If `target` lives in a
  * single-file workspace, promote it to a full folder view so siblings appear.
  */
-async function revealCreated(target: string): Promise<void> {
+async function revealCreated(st: WinState, target: string): Promise<void> {
   const t = resolve(target)
-  const f = workspace.find((w) => {
+  const f = st.workspace.find((w) => {
     const r = resolve(w.root)
     return t === r || t.startsWith(r + sep)
   })
@@ -137,30 +191,30 @@ async function revealCreated(target: string): Promise<void> {
     f.name = basename(f.root)
   }
   f.tree = await scanFolder(f.root)
-  emitWorkspace()
+  emitWorkspace(st)
 }
 
-async function refreshAll(): Promise<void> {
-  for (const f of workspace) {
+async function refreshAll(st: WinState): Promise<void> {
+  for (const f of st.workspace) {
     if (!f.isFile) f.tree = await scanFolder(f.root)
   }
-  emitWorkspace()
+  emitWorkspace(st)
 }
 
-async function openFolderDialog(add: boolean): Promise<void> {
-  if (!mainWindow) return
-  const result = await dialog.showOpenDialog(mainWindow, {
+async function openFolderDialog(st: WinState, add: boolean): Promise<void> {
+  if (!windowAlive(st)) return
+  const result = await dialog.showOpenDialog(st.win, {
     properties: ['openDirectory'],
     message: add ? 'Add a folder to the workspace' : 'Choose a folder of markdown to read'
   })
   if (result.canceled || result.filePaths.length === 0) return
-  await openFolder(result.filePaths[0], add)
+  await openFolder(st, result.filePaths[0], add)
 }
 
 /** One dialog that accepts a folder OR a single file (macOS allows both). */
-async function openDialog(): Promise<void> {
-  if (!mainWindow) return
-  const result = await dialog.showOpenDialog(mainWindow, {
+async function openDialog(st: WinState): Promise<void> {
+  if (!windowAlive(st)) return
+  const result = await dialog.showOpenDialog(st.win, {
     properties: ['openFile', 'openDirectory'],
     // "All files" is the default so nothing is wrongly greyed out — macOS can
     // resolve some .md files to a non-markdown UTI, which an extension filter
@@ -174,21 +228,21 @@ async function openDialog(): Promise<void> {
   if (result.canceled || result.filePaths.length === 0) return
   const p = result.filePaths[0]
   const stat = await fs.stat(p).catch(() => null)
-  if (stat?.isDirectory()) await openFolder(p, false)
-  else if (stat?.isFile()) await openFile(p) // read-time guardrail handles binary/unsupported
+  if (stat?.isDirectory()) await openFolder(st, p, false)
+  else if (stat?.isFile()) await openFile(st, p) // read-time guardrail handles binary/unsupported
 }
 
 /**
  * New File. With a workspace open, the renderer's in-place create dialog handles
  * it. With nothing open, ask where to save (Save As), create it, and open it.
  */
-async function newFileFlow(): Promise<void> {
-  if (workspace.length > 0) {
-    sendToUi('cmd:new-file')
+async function newFileFlow(st: WinState): Promise<void> {
+  if (st.workspace.length > 0) {
+    sendToWin(st, 'cmd:new-file')
     return
   }
-  if (!mainWindow) return
-  const { canceled, filePath } = await dialog.showSaveDialog(mainWindow, {
+  if (!windowAlive(st)) return
+  const { canceled, filePath } = await dialog.showSaveDialog(st.win, {
     title: 'New File',
     message: 'Choose where to create the file',
     buttonLabel: 'Create',
@@ -199,18 +253,18 @@ async function newFileFlow(): Promise<void> {
   if (!(await fs.stat(filePath).then(() => true).catch(() => false))) {
     await fs.writeFile(filePath, '', 'utf8').catch(() => {})
   }
-  await openFile(filePath) // selects it via emitWorkspace
-  sendToUi('cmd:new-file-created') // renderer opens it in edit mode
+  await openFile(st, filePath) // selects it via emitWorkspace
+  sendToWin(st, 'cmd:new-file-created') // renderer opens it in edit mode
 }
 
 /** New Folder with nothing open: pick a location, create it, open it as the workspace. */
-async function newFolderFlow(): Promise<void> {
-  if (workspace.length > 0) {
-    sendToUi('cmd:new-folder')
+async function newFolderFlow(st: WinState): Promise<void> {
+  if (st.workspace.length > 0) {
+    sendToWin(st, 'cmd:new-folder')
     return
   }
-  if (!mainWindow) return
-  const { canceled, filePath } = await dialog.showSaveDialog(mainWindow, {
+  if (!windowAlive(st)) return
+  const { canceled, filePath } = await dialog.showSaveDialog(st.win, {
     title: 'New Folder',
     message: 'Choose where to create the folder',
     buttonLabel: 'Create',
@@ -219,20 +273,24 @@ async function newFolderFlow(): Promise<void> {
   })
   if (canceled || !filePath) return
   await fs.mkdir(filePath, { recursive: true }).catch(() => {})
-  await openFolder(filePath, false)
+  await openFolder(st, filePath, false)
 }
 
-function createWindow(): void {
+function createWindow(): BrowserWindow {
   const { width: screenW, height: screenH } = screen.getPrimaryDisplay().workAreaSize
   const width = Math.min(1180, screenW - 60)
   const height = Math.min(800, screenH - 60)
 
-  mainWindow = new BrowserWindow({
+  // Additional windows cascade from the focused one instead of stacking dead-centre.
+  const focused = BrowserWindow.getFocusedWindow()
+  const cascade = focused ? { x: focused.getBounds().x + 28, y: focused.getBounds().y + 28 } : { center: true }
+
+  const win = new BrowserWindow({
     width,
     height,
     minWidth: 560,
     minHeight: 420,
-    center: true,
+    ...cascade,
     show: false,
     titleBarStyle: 'hiddenInset',
     backgroundColor: nativeTheme.shouldUseDarkColors ? '#141318' : '#FBFAFD',
@@ -245,28 +303,31 @@ function createWindow(): void {
     }
   })
 
-  mainWindow.on('ready-to-show', () => {
+  const st: WinState = { win, workspace: [], unsavedChanges: false, forceClose: false, lastRendererReload: 0 }
+  winStates.set(win.id, st)
+
+  win.on('ready-to-show', () => {
     // Safety: refit/recenter if the window is bigger than the screen or off-screen.
-    if (mainWindow) {
+    if (!win.isDestroyed()) {
       const wa = screen.getPrimaryDisplay().workArea
-      const b = mainWindow.getBounds()
+      const b = win.getBounds()
       const w = Math.min(b.width, wa.width - 60)
       const h = Math.min(b.height, wa.height - 60)
       const offscreen =
         b.x < wa.x || b.y < wa.y || b.x + b.width > wa.x + wa.width || b.y + b.height > wa.y + wa.height
       if (w !== b.width || h !== b.height || offscreen) {
-        mainWindow.setBounds({
+        win.setBounds({
           width: w,
           height: h,
           x: wa.x + Math.round((wa.width - w) / 2),
           y: wa.y + Math.round((wa.height - h) / 2)
         })
       }
+      win.show()
     }
-    mainWindow?.show()
   })
 
-  mainWindow.webContents.setWindowOpenHandler(({ url }) => {
+  win.webContents.setWindowOpenHandler(({ url }) => {
     shell.openExternal(url)
     return { action: 'deny' }
   })
@@ -274,7 +335,7 @@ function createWindow(): void {
   // Right-click menu for editable fields / selected text (Electron has none by
   // default). Items are contextual: paste only in editable fields, copy/cut only
   // with a selection.
-  mainWindow.webContents.on('context-menu', (_e, params) => {
+  win.webContents.on('context-menu', (_e, params) => {
     const { editFlags, isEditable, selectionText } = params
     const hasSelection = selectionText.trim().length > 0
     const items: Electron.MenuItemConstructorOptions[] = []
@@ -290,68 +351,70 @@ function createWindow(): void {
       items.push({ role: 'copy' }, { type: 'separator' }, { role: 'selectAll' })
     }
     if (items.length === 0) return
-    Menu.buildFromTemplate(items).popup({ window: mainWindow ?? undefined })
+    Menu.buildFromTemplate(items).popup({ window: win })
   })
 
   // Guard against losing unsaved edits when the window/app closes.
-  mainWindow.on('close', (e) => {
-    if (!unsavedChanges || forceClose || !mainWindow) return
+  win.on('close', (e) => {
+    if (!st.unsavedChanges || st.forceClose || win.isDestroyed()) return
     e.preventDefault()
     dialog
-      .showMessageBox(mainWindow, {
+      .showMessageBox(win, {
         type: 'warning',
         buttons: ['Save', "Don't Save", 'Cancel'],
         defaultId: 0,
         cancelId: 2,
         message: 'Save changes before closing?',
-        detail: "Your edits to this file will be lost if you don't save them."
+        detail: "Your edits will be lost if you don't save them."
       })
       .then(({ response }) => {
-        if (response === 0) sendToUi('app:save-and-close')
+        if (response === 0) sendToWin(st, 'app:save-and-close')
         else if (response === 1) {
-          forceClose = true
-          mainWindow?.close()
+          st.forceClose = true
+          if (!win.isDestroyed()) win.close()
         }
         // response === 2 (Cancel): stay open
       })
   })
 
-  // Clear the reference once the window is gone, so background listeners
+  // Drop the per-window state once the window is gone, so background listeners
   // (e.g. nativeTheme) don't touch a destroyed window.
-  mainWindow.on('closed', () => {
-    mainWindow = null
+  win.on('closed', () => {
+    stopWatching(win)
+    winStates.delete(win.id)
   })
 
   // The renderer crashed (gone / OOM / GPU) — report it, then auto-recover by
   // reloading the window so the user sees a brief flash instead of a dead window.
   // A 5s guard prevents a reload storm if it crashes again immediately on load.
-  mainWindow.webContents.on('render-process-gone', (_e, details) => {
+  win.webContents.on('render-process-gone', (_e, details) => {
     if (details.reason === 'clean-exit') return
     reportCrash('render-process-gone', `${details.reason} (exitCode ${details.exitCode})`, crashMeta())
     const now = Date.now()
-    if (windowAlive() && now - lastRendererReload > 5000) {
-      lastRendererReload = now
-      mainWindow!.webContents.reload()
+    if (windowAlive(st) && now - st.lastRendererReload > 5000) {
+      st.lastRendererReload = now
+      win.webContents.reload()
     }
   })
 
   // In-file find (⌘F) — relay native find results to the renderer's find bar.
-  mainWindow.webContents.on('found-in-page', (_e, result) => {
-    sendToUi('find:result', {
+  win.webContents.on('found-in-page', (_e, result) => {
+    sendToWin(st, 'find:result', {
       active: result.activeMatchOrdinal,
       total: result.matches
     })
   })
 
   if (isDev) {
-    mainWindow.webContents.on('console-message', (e) => {
+    win.webContents.on('console-message', (e) => {
       if (e.level === 'warning' || e.level === 'error')
         console.log(`[renderer ${e.level.toUpperCase()}] ${e.message} (${e.sourceId}:${e.lineNumber})`)
     })
-    mainWindow.loadURL(process.env['ELECTRON_RENDERER_URL']!)
+    win.loadURL(process.env['ELECTRON_RENDERER_URL']!)
   } else {
-    mainWindow.loadFile(join(__dirname, '../renderer/index.html'))
+    win.loadFile(join(__dirname, '../renderer/index.html'))
   }
+  return win
 }
 
 // ---- Update check (GitHub Releases) ----
@@ -396,9 +459,10 @@ function fetchLatestRelease(): Promise<ReleaseInfo | null> {
 /** Check GitHub for a newer release. `manual` shows an "up to date" / error dialog too. */
 async function checkForUpdates(manual: boolean): Promise<void> {
   const rel = await fetchLatestRelease()
+  const st = focusedState()
   if (!rel) {
-    if (manual && windowAlive()) {
-      await dialog.showMessageBox(mainWindow!, {
+    if (manual && windowAlive(st)) {
+      await dialog.showMessageBox(st.win, {
         type: 'warning',
         buttons: ['OK'],
         message: "Couldn't check for updates",
@@ -408,9 +472,9 @@ async function checkForUpdates(manual: boolean): Promise<void> {
     return
   }
   if (cmpVersions(rel.version, app.getVersion()) > 0) {
-    sendToUi('update:available', { ...rel, manual })
-  } else if (manual && windowAlive()) {
-    await dialog.showMessageBox(mainWindow!, {
+    sendToWin(st, 'update:available', { ...rel, manual })
+  } else if (manual && windowAlive(st)) {
+    await dialog.showMessageBox(st.win, {
       type: 'info',
       buttons: ['OK'],
       message: "You're up to date",
@@ -470,7 +534,7 @@ function buildMenu(): void {
         { role: 'about' },
         { label: 'Check for Updates…', click: () => void checkForUpdates(true) },
         { type: 'separator' },
-        { label: 'Settings…', accelerator: 'CmdOrCtrl+,', click: () => sendToUi('cmd:settings') },
+        { label: 'Settings…', accelerator: 'CmdOrCtrl+,', click: () => sendToFocused('cmd:settings') },
         { type: 'separator' },
         { role: 'hide' },
         { role: 'hideOthers' },
@@ -482,23 +546,29 @@ function buildMenu(): void {
     {
       label: 'File',
       submenu: [
-        { label: 'New File…', accelerator: accel('newFile'), click: () => void newFileFlow() },
-        { label: 'New Folder…', accelerator: accel('newFolder'), click: () => void newFolderFlow() },
+        { label: 'New Window', accelerator: accel('newWindow'), click: () => void createWindow() },
         { type: 'separator' },
-        { label: 'Open…', accelerator: accel('open'), click: () => openDialog() },
-        { label: 'Add Folder to Workspace…', accelerator: accel('addFolder'), click: () => openFolderDialog(true) },
+        { label: 'New File…', accelerator: accel('newFile'), click: () => void ensureWindow().then(newFileFlow) },
+        { label: 'New Folder…', accelerator: accel('newFolder'), click: () => void ensureWindow().then(newFolderFlow) },
         { type: 'separator' },
-        { label: 'Jump to File…', accelerator: accel('commandPalette'), click: () => sendToUi('cmd:command-palette') },
-        { label: 'Close File', accelerator: accel('closeFile'), click: () => sendToUi('cmd:close-file') },
-        { label: 'Refresh', accelerator: accel('refresh'), click: () => void refreshAll() },
+        { label: 'Open…', accelerator: accel('open'), click: () => void ensureWindow().then(openDialog) },
+        {
+          label: 'Add Folder to Workspace…',
+          accelerator: accel('addFolder'),
+          click: () => void ensureWindow().then((st) => openFolderDialog(st, true))
+        },
         { type: 'separator' },
-        { label: 'Toggle Edit Mode', accelerator: accel('toggleEdit'), click: () => sendToUi('cmd:toggle-edit') },
-        { label: 'Save', accelerator: accel('save'), click: () => sendToUi('cmd:save') },
+        { label: 'Jump to File…', accelerator: accel('commandPalette'), click: () => sendToFocused('cmd:command-palette') },
+        { label: 'Close Tab', accelerator: accel('closeFile'), click: () => sendToFocused('cmd:close-file') },
+        { label: 'Refresh', accelerator: accel('refresh'), click: () => void refreshFocused() },
         { type: 'separator' },
-        { label: 'Find in Files…', accelerator: accel('searchAll'), click: () => sendToUi('cmd:search') },
+        { label: 'Toggle Edit Mode', accelerator: accel('toggleEdit'), click: () => sendToFocused('cmd:toggle-edit') },
+        { label: 'Save', accelerator: accel('save'), click: () => sendToFocused('cmd:save') },
         { type: 'separator' },
-        { label: 'Export as HTML…', click: () => sendToUi('cmd:export-html') },
-        { label: 'Export as PDF…', click: () => sendToUi('cmd:export-pdf') }
+        { label: 'Find in Files…', accelerator: accel('searchAll'), click: () => sendToFocused('cmd:search') },
+        { type: 'separator' },
+        { label: 'Export as HTML…', click: () => sendToFocused('cmd:export-html') },
+        { label: 'Export as PDF…', click: () => sendToFocused('cmd:export-pdf') }
       ]
     },
     {
@@ -506,8 +576,8 @@ function buildMenu(): void {
       submenu: [
         // Undo/redo route to CodeMirror — Electron's native execCommand undo
         // doesn't drive CodeMirror 6's own history.
-        { label: 'Undo', accelerator: accel('undo'), click: () => sendToUi('cmd:edit-undo') },
-        { label: 'Redo', accelerator: accel('redo'), click: () => sendToUi('cmd:edit-redo') },
+        { label: 'Undo', accelerator: accel('undo'), click: () => sendToFocused('cmd:edit-undo') },
+        { label: 'Redo', accelerator: accel('redo'), click: () => sendToFocused('cmd:edit-redo') },
         { type: 'separator' },
         // Native clipboard roles act on the focused editable element (incl. the editor).
         { role: 'cut' },
@@ -522,8 +592,8 @@ function buildMenu(): void {
     {
       label: 'View',
       submenu: [
-        { label: 'Toggle Sidebar', accelerator: accel('toggleSidebar'), click: () => sendToUi('cmd:focus-mode') },
-        { label: 'Toggle Table of Contents', accelerator: accel('toggleToc'), click: () => sendToUi('cmd:toggle-toc') },
+        { label: 'Toggle Sidebar', accelerator: accel('toggleSidebar'), click: () => sendToFocused('cmd:focus-mode') },
+        { label: 'Toggle Table of Contents', accelerator: accel('toggleToc'), click: () => sendToFocused('cmd:toggle-toc') },
         { type: 'separator' },
         { role: 'resetZoom' },
         { role: 'zoomIn' },
@@ -535,13 +605,21 @@ function buildMenu(): void {
     },
     {
       label: 'Window',
-      submenu: [{ role: 'minimize' }, { role: 'zoom' }, { role: 'front' }]
+      submenu: [
+        { role: 'minimize' },
+        { role: 'zoom' },
+        { type: 'separator' },
+        { label: 'Show Next Tab', accelerator: accel('nextTab'), click: () => sendToFocused('cmd:next-tab') },
+        { label: 'Show Previous Tab', accelerator: accel('prevTab'), click: () => sendToFocused('cmd:prev-tab') },
+        { type: 'separator' },
+        { role: 'front' }
+      ]
     },
     {
       role: 'help',
       submenu: [
-        { label: 'Keyboard Shortcuts', accelerator: accel('shortcuts'), click: () => sendToUi('cmd:shortcuts') },
-        { label: 'Contributing & Developer Info', click: () => sendToUi('cmd:developer') },
+        { label: 'Keyboard Shortcuts', accelerator: accel('shortcuts'), click: () => sendToFocused('cmd:shortcuts') },
+        { label: 'Contributing & Developer Info', click: () => sendToFocused('cmd:developer') },
         { type: 'separator' },
         { label: 'View Project on GitHub', click: () => shell.openExternal('https://github.com/avnat/orchid') },
         { type: 'separator' },
@@ -560,6 +638,11 @@ function buildMenu(): void {
     }
   ]
   Menu.setApplicationMenu(Menu.buildFromTemplate(template))
+}
+
+async function refreshFocused(): Promise<void> {
+  const st = focusedState()
+  if (st) await refreshAll(st)
 }
 
 // Collect native crashes locally (no upload — we read them on next launch).
@@ -651,7 +734,7 @@ app.whenReady().then(async () => {
   protocol.handle('orchid-asset', (request) => {
     const url = new URL(request.url)
     const filePath = decodeURIComponent(url.pathname.replace(/^\//, ''))
-    if (!withinWorkspace(filePath)) return new Response('Forbidden', { status: 403 })
+    if (!withinAnyWorkspace(filePath)) return new Response('Forbidden', { status: 403 })
     return net.fetch(pathToFileURL(filePath).toString())
   })
 
@@ -669,7 +752,8 @@ app.whenReady().then(async () => {
   }
 
   safeBuildMenu()
-  createWindow()
+  const firstWin = createWindow()
+  const firstState = (): WinState | null => stateFor(firstWin)
 
   // One quiet update check shortly after launch (the renderer ignores it if the
   // user already dismissed this version). No repeated polling.
@@ -680,12 +764,12 @@ app.whenReady().then(async () => {
   // Dev/promo: capture a sequence of frames (for assembling a GIF/video).
   const framesDir = process.env['ORCHID_FRAMES']
   if (framesDir) {
-    mainWindow?.webContents.once('did-finish-load', async () => {
-      if (!mainWindow) return
+    firstWin.webContents.once('did-finish-load', async () => {
+      if (firstWin.isDestroyed()) return
       const evalJs = process.env['ORCHID_EVAL']
       if (evalJs) {
         await new Promise((r) => setTimeout(r, 500))
-        await mainWindow.webContents.executeJavaScript(evalJs).catch(() => {})
+        await firstWin.webContents.executeJavaScript(evalJs).catch(() => {})
       }
       await new Promise((r) => setTimeout(r, 700)) // let layout/animation settle
       const count = Number(process.env['ORCHID_FRAME_COUNT'] || '48')
@@ -694,7 +778,7 @@ app.whenReady().then(async () => {
       for (let i = 0; i < count; i++) {
         if (spinSel) {
           const deg = (i / count) * 360 // exact even rotation → seamless loop
-          await mainWindow.webContents
+          await firstWin.webContents
             .executeJavaScript(
               `(function(){var el=document.querySelector(${JSON.stringify(spinSel)});` +
                 `if(el){el.style.animation='none';el.style.transformOrigin='50% 50%';` +
@@ -703,7 +787,7 @@ app.whenReady().then(async () => {
             .catch(() => {})
           await new Promise((r) => setTimeout(r, 40)) // let it paint
         }
-        const img = await mainWindow.webContents.capturePage()
+        const img = await firstWin.webContents.capturePage()
         await fs.writeFile(join(framesDir, `frame-${String(i).padStart(3, '0')}.png`), img.toPNG())
         if (!spinSel) await new Promise((r) => setTimeout(r, interval))
       }
@@ -716,14 +800,16 @@ app.whenReady().then(async () => {
   const autoOpen = process.env['ORCHID_OPEN']
   const shotPath = process.env['ORCHID_SHOT']
   if (autoOpen) {
-    mainWindow?.webContents.once('did-finish-load', async () => {
-      const st = await fs.stat(autoOpen).catch(() => null)
-      if (st?.isFile()) await openFile(autoOpen)
-      else await openFolder(autoOpen, false)
-      if (!mainWindow) return
+    firstWin.webContents.once('did-finish-load', async () => {
+      const st = firstState()
+      if (!st) return
+      const stat = await fs.stat(autoOpen).catch(() => null)
+      if (stat?.isFile()) await openFile(st, autoOpen)
+      else await openFolder(st, autoOpen, false)
+      if (firstWin.isDestroyed()) return
       const sel = process.env['ORCHID_SELECT']
       if (sel) {
-        await mainWindow.webContents.executeJavaScript(
+        await firstWin.webContents.executeJavaScript(
           `window.__store && window.__store.getState().selectFile(${JSON.stringify(sel)})`
         )
       }
@@ -731,7 +817,7 @@ app.whenReady().then(async () => {
       const exportTest = process.env['ORCHID_EXPORT_TEST']
       if (exportTest) {
         await new Promise((r) => setTimeout(r, 1200))
-        const html: string | null = await mainWindow.webContents.executeJavaScript(
+        const html: string | null = await firstWin.webContents.executeJavaScript(
           'window.__buildExport ? window.__buildExport("Export Test") : null'
         )
         if (html) {
@@ -752,24 +838,24 @@ app.whenReady().then(async () => {
         const evalJs = process.env['ORCHID_EVAL']
         if (evalJs) {
           await new Promise((r) => setTimeout(r, 400))
-          await mainWindow.webContents.executeJavaScript(evalJs).catch(() => {})
+          await firstWin.webContents.executeJavaScript(evalJs).catch(() => {})
         }
         setTimeout(async () => {
-          const img = await mainWindow!.webContents.capturePage()
+          const img = await firstWin.webContents.capturePage()
           await fs.writeFile(shotPath, img.toPNG())
           console.log('ORCHID_SHOT written to', shotPath)
         }, 1400)
       }
     })
   } else if (shotPath) {
-    mainWindow?.webContents.once('did-finish-load', async () => {
+    firstWin.webContents.once('did-finish-load', async () => {
       const evalJs = process.env['ORCHID_EVAL']
-      if (evalJs && mainWindow) {
+      if (evalJs && !firstWin.isDestroyed()) {
         await new Promise((r) => setTimeout(r, 500))
-        await mainWindow.webContents.executeJavaScript(evalJs).catch(() => {})
+        await firstWin.webContents.executeJavaScript(evalJs).catch(() => {})
       }
       setTimeout(async () => {
-        const img = await mainWindow!.webContents.capturePage()
+        const img = await firstWin.webContents.capturePage()
         await fs.writeFile(shotPath, img.toPNG())
         console.log('ORCHID_SHOT written to', shotPath)
       }, 1200)
@@ -777,9 +863,9 @@ app.whenReady().then(async () => {
   }
 
   // Fires on system appearance changes (e.g. macOS auto Light↔Dark at sunset),
-  // even when the window has been closed but the app is still running.
+  // even when every window has been closed but the app is still running.
   nativeTheme.on('updated', () => {
-    sendToUi('theme:changed', { shouldUseDarkColors: nativeTheme.shouldUseDarkColors })
+    broadcast('theme:changed', { shouldUseDarkColors: nativeTheme.shouldUseDarkColors })
   })
 
   app.on('activate', () => {
@@ -793,15 +879,31 @@ app.on('window-all-closed', () => {
 })
 
 // ---- IPC ----
-ipcMain.handle('dialog:open', async () => openDialog())
-ipcMain.handle('dialog:addFolder', async () => openFolderDialog(true))
+ipcMain.handle('dialog:open', async (e) => {
+  const st = stateFromEvent(e)
+  if (st) await openDialog(st)
+})
+ipcMain.handle('dialog:addFolder', async (e) => {
+  const st = stateFromEvent(e)
+  if (st) await openFolderDialog(st, true)
+})
 
-ipcMain.handle('workspace:openPath', async (_e, p: string) => {
+ipcMain.handle('app:new-window', async () => {
+  createWindow()
+})
+
+// A fresh renderer (first load or a crash-recovery reload) pulls the workspace
+// its window already has — IPC pushes sent before the load are lost otherwise.
+ipcMain.handle('workspace:get', async (e) => ({ folders: stateFromEvent(e)?.workspace ?? [] }))
+
+ipcMain.handle('workspace:openPath', async (e, p: string) => {
+  const st = stateFromEvent(e)
+  if (!st) return
   const stat = await fs.stat(p).catch(() => null)
-  if (stat?.isDirectory()) await openFolder(p, workspace.length > 0)
-  else if (stat?.isFile() && TEXT_RE.test(p)) await openFile(p)
-  else if (stat?.isFile() && mainWindow) {
-    dialog.showMessageBox(mainWindow, {
+  if (stat?.isDirectory()) await openFolder(st, p, st.workspace.length > 0)
+  else if (stat?.isFile() && TEXT_RE.test(p)) await openFile(st, p)
+  else if (stat?.isFile() && windowAlive(st)) {
+    dialog.showMessageBox(st.win, {
       type: 'info',
       buttons: ['OK'],
       message: "Can't open this file",
@@ -810,69 +912,81 @@ ipcMain.handle('workspace:openPath', async (_e, p: string) => {
   }
 })
 
-ipcMain.handle('workspace:closeFolder', async (_e, root: string) => closeFolder(root))
-ipcMain.handle('workspace:refresh', async () => refreshAll())
-ipcMain.handle('workspace:rescan', async (_e, changedPath: string) => rescanFolder(changedPath))
+ipcMain.handle('workspace:closeFolder', async (e, root: string) => {
+  const st = stateFromEvent(e)
+  if (st) closeFolder(st, root)
+})
+ipcMain.handle('workspace:refresh', async (e) => {
+  const st = stateFromEvent(e)
+  if (st) await refreshAll(st)
+})
+ipcMain.handle('workspace:rescan', async (e, changedPath: string) => {
+  const st = stateFromEvent(e)
+  if (st) await rescanFolder(st, changedPath)
+})
 
-ipcMain.handle('fs:read', async (_e, filePath: string) => {
-  if (!withinWorkspace(filePath)) throw new Error('Path outside the workspace')
+ipcMain.handle('fs:read', async (e, filePath: string) => {
+  if (!withinWorkspace(stateFromEvent(e), filePath)) throw new Error('Path outside the workspace')
   const buf = await fs.readFile(filePath)
   // crude binary sniff — a NUL byte near the start means it isn't text we can show
   if (buf.subarray(0, 8000).includes(0)) throw new Error('UNSUPPORTED_BINARY')
   return buf.toString('utf8')
 })
 
-ipcMain.handle('fs:write', async (_e, filePath: string, content: string) => {
-  if (!withinWorkspace(filePath)) throw new Error('Path outside the workspace')
+ipcMain.handle('fs:write', async (e, filePath: string, content: string) => {
+  if (!withinWorkspace(stateFromEvent(e), filePath)) throw new Error('Path outside the workspace')
   await fs.writeFile(filePath, content, 'utf8')
   return true
 })
 
 // Raw bytes for binary viewers (e.g. the PDF reader). Returned as a Uint8Array.
-ipcMain.handle('fs:readBinary', async (_e, filePath: string) => {
-  if (!withinWorkspace(filePath)) throw new Error('Path outside the workspace')
+ipcMain.handle('fs:readBinary', async (e, filePath: string) => {
+  if (!withinWorkspace(stateFromEvent(e), filePath)) throw new Error('Path outside the workspace')
   const buf = await fs.readFile(filePath)
   return new Uint8Array(buf)
 })
 
-ipcMain.handle('fs:reveal', async (_e, filePath: string) => {
-  if (!withinWorkspace(filePath)) return
+ipcMain.handle('fs:reveal', async (e, filePath: string) => {
+  if (!withinWorkspace(stateFromEvent(e), filePath)) return
   shell.showItemInFolder(filePath)
 })
 
 // ---- File / folder operations ----
-ipcMain.handle('fs:createFile', async (_e, dir: string, name: string) => {
+ipcMain.handle('fs:createFile', async (e, dir: string, name: string) => {
+  const st = stateFromEvent(e)
   // Default to .txt when no extension is given (Sublime-style).
   const fname = /\.[^/.]+$/.test(basename(name)) ? name : `${name}.txt`
   const target = join(dir, fname)
-  if (!withinWorkspace(target)) throw new Error('Path outside the workspace')
+  if (!withinWorkspace(st, target)) throw new Error('Path outside the workspace')
   // refuse to clobber an existing file
   if (await fs.stat(target).then(() => true).catch(() => false)) {
     throw new Error('A file with that name already exists')
   }
   await fs.mkdir(dirname(target), { recursive: true })
   await fs.writeFile(target, '', 'utf8')
-  await revealCreated(target) // show it in the sidebar right away
+  await revealCreated(st!, target) // show it in the sidebar right away
   return target
 })
 
-ipcMain.handle('fs:createFolder', async (_e, parentDir: string, name: string) => {
+ipcMain.handle('fs:createFolder', async (e, parentDir: string, name: string) => {
+  const st = stateFromEvent(e)
   const target = join(parentDir, name)
-  if (!withinWorkspace(target)) throw new Error('Path outside the workspace')
+  if (!withinWorkspace(st, target)) throw new Error('Path outside the workspace')
   await fs.mkdir(target, { recursive: true })
-  await revealCreated(target)
+  await revealCreated(st!, target)
   return target
 })
 
-ipcMain.handle('fs:trash', async (_e, target: string) => {
-  if (!withinWorkspace(target)) throw new Error('Path outside the workspace')
+ipcMain.handle('fs:trash', async (e, target: string) => {
+  if (!withinWorkspace(stateFromEvent(e), target)) throw new Error('Path outside the workspace')
   await shell.trashItem(target)
   return true
 })
 
-ipcMain.handle('fs:trashMany', async (_e, paths: string[]) => {
+ipcMain.handle('fs:trashMany', async (e, paths: string[]) => {
+  const st = stateFromEvent(e)
   for (const p of paths) {
-    if (withinWorkspace(p)) await shell.trashItem(p).catch(() => {})
+    if (withinWorkspace(st, p)) await shell.trashItem(p).catch(() => {})
   }
   return true
 })
@@ -880,15 +994,15 @@ ipcMain.handle('fs:trashMany', async (_e, paths: string[]) => {
 const exists = (p: string): Promise<boolean> => fs.stat(p).then(() => true).catch(() => false)
 
 /** Path relative to its workspace folder root (prefixed with the folder name when several are open). */
-function relWorkspacePath(target: string): string {
+function relWorkspacePath(st: WinState, target: string): string {
   const t = resolve(target)
-  const f = workspace.find((w) => {
+  const f = st.workspace.find((w) => {
     const r = resolve(w.root)
     return t === r || t.startsWith(r + sep)
   })
   if (!f) return basename(target)
   const rel = relative(resolve(f.root), t)
-  return workspace.length > 1 ? join(f.name, rel) : rel
+  return st.workspace.length > 1 ? join(f.name, rel) : rel
 }
 
 /** Copy a file or folder beside itself as "name copy" (auto-incrementing). */
@@ -904,23 +1018,25 @@ async function duplicatePath(target: string): Promise<string> {
   return dest
 }
 
-ipcMain.handle('fs:rename', async (_e, target: string, newName: string) => {
-  if (!withinWorkspace(target)) throw new Error('Path outside the workspace')
+ipcMain.handle('fs:rename', async (e, target: string, newName: string) => {
+  const st = stateFromEvent(e)
+  if (!withinWorkspace(st, target)) throw new Error('Path outside the workspace')
   const dest = join(dirname(target), newName.trim())
-  if (!withinWorkspace(dest)) throw new Error('Path outside the workspace')
+  if (!withinWorkspace(st, dest)) throw new Error('Path outside the workspace')
   if (resolve(dest) === resolve(target)) return target
   if (await exists(dest)) throw new Error('An item with that name already exists')
   await fs.rename(target, dest)
   return dest
 })
 
-ipcMain.handle('fs:duplicate', async (_e, target: string) => {
-  if (!withinWorkspace(target)) throw new Error('Path outside the workspace')
+ipcMain.handle('fs:duplicate', async (e, target: string) => {
+  if (!withinWorkspace(stateFromEvent(e), target)) throw new Error('Path outside the workspace')
   return duplicatePath(target)
 })
 
-ipcMain.handle('fs:move', async (_e, src: string, destDir: string) => {
-  if (!withinWorkspace(src) || !withinWorkspace(destDir)) throw new Error('Path outside the workspace')
+ipcMain.handle('fs:move', async (e, src: string, destDir: string) => {
+  const st = stateFromEvent(e)
+  if (!withinWorkspace(st, src) || !withinWorkspace(st, destDir)) throw new Error('Path outside the workspace')
   const s = resolve(src)
   const d = resolve(destDir)
   // no-op if already there; refuse to drop a folder into itself or a descendant
@@ -932,17 +1048,24 @@ ipcMain.handle('fs:move', async (_e, src: string, destDir: string) => {
   return dest
 })
 
-ipcMain.handle('fs:fileMenu', (_e, target: string, opts?: { pinned?: boolean; isFolder?: boolean }) => {
-  if (!withinWorkspace(target)) return
+ipcMain.handle('fs:fileMenu', (e, target: string, opts?: { pinned?: boolean; isFolder?: boolean }) => {
+  const st = stateFromEvent(e)
+  if (!st || !withinWorkspace(st, target)) return
   const send = (ch: string): void => {
-    sendToUi(ch, target)
+    sendToWin(st, ch, target)
   }
   const menu = Menu.buildFromTemplate([
+    ...(opts?.isFolder
+      ? []
+      : ([
+          { label: 'Open in New Tab', click: () => send('menu:open-new-tab') },
+          { type: 'separator' }
+        ] as Electron.MenuItemConstructorOptions[])),
     { label: 'Rename…', click: () => send('menu:rename') },
     { label: 'Duplicate', click: () => duplicatePath(target).catch(() => {}) },
     { type: 'separator' },
     { label: 'Copy Path', click: () => clipboard.writeText(target) },
-    { label: 'Copy Relative Path', click: () => clipboard.writeText(relWorkspacePath(target)) },
+    { label: 'Copy Relative Path', click: () => clipboard.writeText(relWorkspacePath(st, target)) },
     { type: 'separator' },
     { label: opts?.pinned ? 'Unpin' : 'Pin', click: () => send('menu:pin-toggle') },
     { label: 'Select (for multi-delete)', click: () => send('file:select') },
@@ -951,8 +1074,8 @@ ipcMain.handle('fs:fileMenu', (_e, target: string, opts?: { pinned?: boolean; is
     {
       label: 'Move to Trash',
       click: async () => {
-        if (!withinWorkspace(target) || !mainWindow) return
-        const { response } = await dialog.showMessageBox(mainWindow, {
+        if (!withinWorkspace(st, target) || !windowAlive(st)) return
+        const { response } = await dialog.showMessageBox(st.win, {
           type: 'warning',
           buttons: ['Cancel', 'Move to Trash'],
           defaultId: 1,
@@ -964,7 +1087,7 @@ ipcMain.handle('fs:fileMenu', (_e, target: string, opts?: { pinned?: boolean; is
       }
     }
   ])
-  menu.popup({ window: mainWindow ?? undefined })
+  menu.popup({ window: windowAlive(st) ? st.win : undefined })
 })
 
 ipcMain.handle('shell:openExternal', async (_e, url: string) => {
@@ -973,7 +1096,10 @@ ipcMain.handle('shell:openExternal', async (_e, url: string) => {
 
 ipcMain.handle('update:check', async () => checkForUpdates(true))
 
-ipcMain.handle('app:new-file', async () => newFileFlow())
+ipcMain.handle('app:new-file', async (e) => {
+  const st = stateFromEvent(e)
+  if (st) await newFileFlow(st)
+})
 
 ipcMain.handle('theme:get', async () => ({ shouldUseDarkColors: nativeTheme.shouldUseDarkColors }))
 
@@ -995,7 +1121,7 @@ ipcMain.handle('shortcuts:set', async (_e, id: string, accelerator: string | nul
   await saveShortcutOverrides()
   safeBuildMenu()
   const resolved = resolvedShortcuts()
-  sendToUi('shortcuts:changed', resolved)
+  broadcast('shortcuts:changed', resolved)
   return { ok: true, ...resolved }
 })
 
@@ -1004,39 +1130,50 @@ ipcMain.handle('shortcuts:reset', async () => {
   await saveShortcutOverrides()
   safeBuildMenu()
   const resolved = resolvedShortcuts()
-  sendToUi('shortcuts:changed', resolved)
+  broadcast('shortcuts:changed', resolved)
   return resolved
 })
 
 // ---- In-file find (⌘F) ----
-ipcMain.handle('find:start', (_e, query: string, opts: { forward?: boolean; findNext?: boolean }) => {
-  if (query) mainWindow?.webContents.findInPage(query, opts)
+ipcMain.handle('find:start', (e, query: string, opts: { forward?: boolean; findNext?: boolean }) => {
+  const st = stateFromEvent(e)
+  if (query && windowAlive(st)) st.win.webContents.findInPage(query, opts)
 })
-ipcMain.handle('find:stop', () => {
-  mainWindow?.webContents.stopFindInPage('clearSelection')
+ipcMain.handle('find:stop', (e) => {
+  const st = stateFromEvent(e)
+  if (windowAlive(st)) st.win.webContents.stopFindInPage('clearSelection')
 })
 
-// ---- Unsaved-changes / quit guard ----
-ipcMain.on('win:dirty', (_e, dirty: boolean) => {
-  unsavedChanges = !!dirty
+// ---- Unsaved-changes / close guard ----
+ipcMain.on('win:dirty', (e, dirty: boolean) => {
+  const st = stateFromEvent(e)
+  if (st) st.unsavedChanges = !!dirty
 })
-ipcMain.on('win:ready-to-close', () => {
-  forceClose = true
-  mainWindow?.close()
+ipcMain.on('win:ready-to-close', (e) => {
+  const st = stateFromEvent(e)
+  if (!st) return
+  st.forceClose = true
+  if (!st.win.isDestroyed()) st.win.close()
+})
+// ⌘W with no tabs left closes the window itself (still runs the close guard).
+ipcMain.on('win:close', (e) => {
+  const st = stateFromEvent(e)
+  if (st && !st.win.isDestroyed()) st.win.close()
 })
 
 // ---- Content search across all open folders ----
-ipcMain.handle('fs:search', async (_e, query: string) => {
-  if (!query || workspace.length === 0) return []
+ipcMain.handle('fs:search', async (e, query: string) => {
+  const st = stateFromEvent(e)
+  if (!query || !st || st.workspace.length === 0) return []
   const q = query.toLowerCase()
-  const multi = workspace.length > 1
+  const multi = st.workspace.length > 1
   const results: {
     path: string
     relPath: string
     name: string
     matches: { lineNumber: number; text: string }[]
   }[] = []
-  for (const folder of workspace) {
+  for (const folder of st.workspace) {
     for (const file of flattenFiles(folder.tree)) {
       let text: string
       try {
@@ -1063,17 +1200,17 @@ ipcMain.handle('fs:search', async (_e, query: string) => {
 })
 
 // ---- Export ----
-async function chooseSavePath(defaultName: string, ext: string): Promise<string | null> {
-  if (!mainWindow) return null
-  const res = await dialog.showSaveDialog(mainWindow, {
+async function chooseSavePath(st: WinState | null, defaultName: string, ext: string): Promise<string | null> {
+  if (!windowAlive(st)) return null
+  const res = await dialog.showSaveDialog(st.win, {
     defaultPath: defaultName,
     filters: [{ name: ext.toUpperCase(), extensions: [ext] }]
   })
   return res.canceled || !res.filePath ? null : res.filePath
 }
 
-ipcMain.handle('export:html', async (_e, html: string, defaultName: string) => {
-  const out = await chooseSavePath(defaultName, 'html')
+ipcMain.handle('export:html', async (e, html: string, defaultName: string) => {
+  const out = await chooseSavePath(stateFromEvent(e), defaultName, 'html')
   if (!out) return false
   await fs.writeFile(out, html, 'utf8')
   shell.showItemInFolder(out)
@@ -1083,12 +1220,12 @@ ipcMain.handle('export:html', async (_e, html: string, defaultName: string) => {
 ipcMain.handle(
   'export:pdf',
   async (
-    _e,
+    e,
     html: string,
     defaultName: string,
     opts?: { header?: string; footer?: string; pageNumbers?: boolean }
   ) => {
-    const out = await chooseSavePath(defaultName, 'pdf')
+    const out = await chooseSavePath(stateFromEvent(e), defaultName, 'pdf')
     if (!out) return false
     const tmp = join(app.getPath('temp'), `orchid-export-${Date.now()}.html`)
     await fs.writeFile(tmp, html, 'utf8')

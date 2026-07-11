@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import type { WorkspaceFolder, MdNode } from '../src/renderer/src/types'
+import type { TabSnapshot } from '../src/renderer/src/store/useStore'
 
 // Each test gets a fresh module instance so the singleton store re-reads
 // localStorage at creation time (covers the persisted-init branches).
@@ -19,6 +20,9 @@ function dir(path: string, children: MdNode[]): MdNode {
 }
 function folder(root: string, tree: MdNode[], extra: Partial<WorkspaceFolder> = {}): WorkspaceFolder {
   return { root, name: root.split('/').pop()!, tree, ...extra }
+}
+function snap(content: string, savedContent = content, extra: Partial<TabSnapshot> = {}): TabSnapshot {
+  return { content, savedContent, editMode: false, conflict: false, unsupported: false, ...extra }
 }
 
 const orchidMock = {
@@ -324,7 +328,7 @@ describe('commitMove', () => {
 })
 
 describe('selectFile', () => {
-  it('loads content for a readable file', async () => {
+  it('loads content for a readable file and opens it as the preview tab', async () => {
     const useStore = await freshStore()
     orchidMock.readFile.mockResolvedValue('# hi')
     await useStore.getState().selectFile('/a.md')
@@ -333,6 +337,9 @@ describe('selectFile', () => {
     expect(s.content).toBe('# hi')
     expect(s.savedContent).toBe('# hi')
     expect(s.unsupported).toBe(false)
+    expect(s.tabs).toEqual(['/a.md'])
+    expect(s.stash).toEqual({})
+    expect(s.previewPath).toBe('/a.md')
   })
 
   it('opens a PDF without reading it as text', async () => {
@@ -357,36 +364,303 @@ describe('selectFile', () => {
     expect(s.editMode).toBe(false)
   })
 
-  it('confirms before discarding unsaved edits, and aborts on cancel', async () => {
+  it('browsing reuses the preview tab slot', async () => {
     const useStore = await freshStore()
-    useStore.setState({ activePath: '/a.md', content: 'edited', savedContent: 'orig' })
-    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(false)
-    await useStore.getState().selectFile('/b.md')
-    expect(confirm).toHaveBeenCalled()
-    expect(orchidMock.readFile).not.toHaveBeenCalled()
-    expect(useStore.getState().activePath).toBe('/a.md')
-    confirm.mockRestore()
-  })
-
-  it('proceeds when the discard is confirmed', async () => {
-    const useStore = await freshStore()
-    useStore.setState({ activePath: '/a.md', content: 'edited', savedContent: 'orig' })
-    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(true)
+    useStore.setState({
+      activePath: '/a.md',
+      tabs: ['/a.md'],
+      previewPath: '/a.md',
+      content: 'same',
+      savedContent: 'same'
+    })
     orchidMock.readFile.mockResolvedValue('B')
     await useStore.getState().selectFile('/b.md')
-    expect(useStore.getState().activePath).toBe('/b.md')
-    expect(useStore.getState().content).toBe('B')
-    confirm.mockRestore()
+    const s = useStore.getState()
+    expect(s.activePath).toBe('/b.md')
+    expect(s.tabs).toEqual(['/b.md'])
+    expect(s.stash).toEqual({})
+    expect(s.previewPath).toBe('/b.md')
   })
 
-  it('does not prompt when re-selecting the same file', async () => {
+  it('replaces only the preview slot, leaving other tabs in place', async () => {
     const useStore = await freshStore()
-    useStore.setState({ activePath: '/a.md', content: 'edited', savedContent: 'orig' })
-    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(true)
-    orchidMock.readFile.mockResolvedValue('A')
+    useStore.setState({
+      activePath: '/a.md',
+      tabs: ['/x.md', '/a.md'],
+      previewPath: '/a.md',
+      stash: { '/x.md': snap('X') },
+      content: 'same',
+      savedContent: 'same'
+    })
+    orchidMock.readFile.mockResolvedValue('B')
+    await useStore.getState().selectFile('/b.md')
+    expect(useStore.getState().tabs).toEqual(['/x.md', '/b.md'])
+    expect(useStore.getState().stash['/x.md'].content).toBe('X')
+  })
+
+  it('takes over a background preview slot and activates it', async () => {
+    const useStore = await freshStore()
+    useStore.setState({
+      activePath: '/a.md',
+      tabs: ['/pv.md', '/a.md'],
+      previewPath: '/pv.md',
+      stash: { '/pv.md': snap('PV') },
+      content: 'A',
+      savedContent: 'A'
+    })
+    orchidMock.readFile.mockResolvedValue('B')
+    await useStore.getState().selectFile('/b.md')
+    const s = useStore.getState()
+    expect(s.tabs).toEqual(['/b.md', '/a.md'])
+    expect(s.activePath).toBe('/b.md')
+    expect(s.stash['/a.md'].content).toBe('A')
+    expect(s.stash['/pv.md']).toBeUndefined()
+  })
+
+  it('treats a stashless background preview as clean and reuses it', async () => {
+    const useStore = await freshStore()
+    useStore.setState({ activePath: null, tabs: ['/pv.md'], previewPath: '/pv.md' })
+    orchidMock.readFile.mockResolvedValue('B')
+    await useStore.getState().selectFile('/b.md')
+    expect(useStore.getState().tabs).toEqual(['/b.md'])
+    expect(useStore.getState().previewPath).toBe('/b.md')
+  })
+
+  it('a pinned clean tab stays open — browsing opens a fresh preview tab beside it', async () => {
+    const useStore = await freshStore()
+    useStore.setState({ activePath: '/a.md', tabs: ['/a.md'], previewPath: null, content: 'same', savedContent: 'same' })
+    orchidMock.readFile.mockResolvedValue('B')
+    await useStore.getState().selectFile('/b.md')
+    const s = useStore.getState()
+    expect(s.tabs).toEqual(['/a.md', '/b.md'])
+    expect(s.activePath).toBe('/b.md')
+    expect(s.stash['/a.md'].content).toBe('same')
+    expect(s.previewPath).toBe('/b.md')
+  })
+
+  it('ignores a stale previewPath that is no longer an open tab', async () => {
+    const useStore = await freshStore()
+    useStore.setState({ activePath: '/a.md', tabs: ['/a.md'], previewPath: '/gone.md', content: 'A', savedContent: 'A' })
+    orchidMock.readFile.mockResolvedValue('B')
+    await useStore.getState().selectFile('/b.md')
+    expect(useStore.getState().tabs).toEqual(['/a.md', '/b.md'])
+    expect(useStore.getState().previewPath).toBe('/b.md')
+  })
+
+  it('keeps unsaved preview edits alive in a background tab instead of prompting', async () => {
+    const useStore = await freshStore()
+    useStore.setState({
+      activePath: '/a.md',
+      tabs: ['/a.md'],
+      previewPath: '/a.md',
+      content: 'edited',
+      savedContent: 'orig'
+    })
+    orchidMock.readFile.mockResolvedValue('B')
+    await useStore.getState().selectFile('/b.md')
+    const s = useStore.getState()
+    expect(s.activePath).toBe('/b.md')
+    expect(s.tabs).toEqual(['/a.md', '/b.md'])
+    expect(s.stash['/a.md'].content).toBe('edited')
+    expect(s.stash['/a.md'].savedContent).toBe('orig')
+  })
+
+  it('treats a dirty background preview as pinned', async () => {
+    const useStore = await freshStore()
+    useStore.setState({
+      activePath: '/a.md',
+      tabs: ['/pv.md', '/a.md'],
+      previewPath: '/pv.md',
+      stash: { '/pv.md': snap('draft', 'saved') },
+      content: 'A',
+      savedContent: 'A'
+    })
+    orchidMock.readFile.mockResolvedValue('B')
+    await useStore.getState().selectFile('/b.md')
+    const s = useStore.getState()
+    expect(s.tabs).toEqual(['/pv.md', '/a.md', '/b.md'])
+    expect(s.stash['/pv.md'].content).toBe('draft')
+  })
+
+  it('opens a new tab beside the active one when asked explicitly', async () => {
+    const useStore = await freshStore()
+    useStore.setState({
+      activePath: '/a.md',
+      tabs: ['/a.md', '/c.md'],
+      stash: { '/c.md': { content: 'C', savedContent: 'C', editMode: false, conflict: false, unsupported: false } },
+      content: 'same',
+      savedContent: 'same'
+    })
+    orchidMock.readFile.mockResolvedValue('B')
+    await useStore.getState().selectFile('/b.md', { newTab: true })
+    const s = useStore.getState()
+    expect(s.tabs).toEqual(['/a.md', '/b.md', '/c.md'])
+    expect(s.activePath).toBe('/b.md')
+    expect(s.stash['/a.md'].content).toBe('same')
+  })
+
+  it('switches to an already-open tab and restores its stashed edits', async () => {
+    const useStore = await freshStore()
+    useStore.setState({
+      activePath: '/a.md',
+      tabs: ['/a.md', '/b.md'],
+      stash: { '/b.md': { content: 'draft', savedContent: 'saved', editMode: true, conflict: false, unsupported: false } },
+      content: 'A',
+      savedContent: 'A'
+    })
+    await useStore.getState().selectFile('/b.md')
+    const s = useStore.getState()
+    expect(orchidMock.readFile).not.toHaveBeenCalled()
+    expect(s.activePath).toBe('/b.md')
+    expect(s.content).toBe('draft')
+    expect(s.savedContent).toBe('saved')
+    expect(s.editMode).toBe(true)
+    expect(s.stash['/a.md'].content).toBe('A')
+    expect(s.stash['/b.md']).toBeUndefined()
+  })
+
+  it('switches to an open tab even when nothing is active', async () => {
+    const useStore = await freshStore()
+    useStore.setState({
+      activePath: null,
+      tabs: ['/a.md'],
+      stash: { '/a.md': { content: 'A', savedContent: 'A', editMode: false, conflict: false, unsupported: false } }
+    })
     await useStore.getState().selectFile('/a.md')
-    expect(confirm).not.toHaveBeenCalled()
-    confirm.mockRestore()
+    expect(useStore.getState().activePath).toBe('/a.md')
+    expect(useStore.getState().content).toBe('A')
+  })
+
+  it('restores a blank document when an open tab has no stashed state', async () => {
+    const useStore = await freshStore()
+    useStore.setState({ activePath: '/a.md', tabs: ['/a.md', '/b.md'], content: 'A', savedContent: 'A' })
+    await useStore.getState().selectFile('/b.md')
+    expect(useStore.getState().activePath).toBe('/b.md')
+    expect(useStore.getState().content).toBe('')
+  })
+
+  it('does nothing when re-selecting the active file', async () => {
+    const useStore = await freshStore()
+    useStore.setState({ activePath: '/a.md', tabs: ['/a.md'], content: 'edited', savedContent: 'orig' })
+    await useStore.getState().selectFile('/a.md')
+    expect(orchidMock.readFile).not.toHaveBeenCalled()
+    expect(useStore.getState().content).toBe('edited')
+  })
+})
+
+describe('preview tab pinning', () => {
+  it('a deliberate open of the active preview pins it', async () => {
+    const useStore = await freshStore()
+    useStore.setState({ activePath: '/a.md', tabs: ['/a.md'], previewPath: '/a.md' })
+    await useStore.getState().selectFile('/a.md', { newTab: true })
+    expect(useStore.getState().previewPath).toBeNull()
+    expect(useStore.getState().tabs).toEqual(['/a.md'])
+  })
+
+  it('a deliberate re-open of a pinned active tab changes nothing', async () => {
+    const useStore = await freshStore()
+    useStore.setState({ activePath: '/a.md', tabs: ['/a.md'], previewPath: null })
+    await useStore.getState().selectFile('/a.md', { newTab: true })
+    expect(useStore.getState().previewPath).toBeNull()
+  })
+
+  it('a deliberate open of a background preview tab pins and activates it', async () => {
+    const useStore = await freshStore()
+    useStore.setState({
+      activePath: '/a.md',
+      tabs: ['/a.md', '/pv.md'],
+      previewPath: '/pv.md',
+      stash: { '/pv.md': snap('PV') },
+      content: 'A',
+      savedContent: 'A'
+    })
+    await useStore.getState().selectFile('/pv.md', { newTab: true })
+    expect(useStore.getState().activePath).toBe('/pv.md')
+    expect(useStore.getState().previewPath).toBeNull()
+  })
+
+  it('opening a new tab deliberately keeps the existing preview tab as preview', async () => {
+    const useStore = await freshStore()
+    useStore.setState({
+      activePath: '/pv.md',
+      tabs: ['/pv.md'],
+      previewPath: '/pv.md',
+      content: 'PV',
+      savedContent: 'PV'
+    })
+    orchidMock.readFile.mockResolvedValue('B')
+    await useStore.getState().selectFile('/b.md', { newTab: true })
+    const s = useStore.getState()
+    expect(s.tabs).toEqual(['/pv.md', '/b.md'])
+    expect(s.previewPath).toBe('/pv.md')
+  })
+
+  it('typing in the preview tab pins it', async () => {
+    const useStore = await freshStore()
+    useStore.setState({ activePath: '/a.md', tabs: ['/a.md'], previewPath: '/a.md', content: '', savedContent: '' })
+    useStore.getState().setContent('typed')
+    expect(useStore.getState().previewPath).toBeNull()
+    expect(useStore.getState().content).toBe('typed')
+  })
+
+  it('typing in a pinned tab leaves the preview elsewhere alone', async () => {
+    const useStore = await freshStore()
+    useStore.setState({ activePath: '/a.md', tabs: ['/a.md', '/pv.md'], previewPath: '/pv.md' })
+    useStore.getState().setContent('typed')
+    expect(useStore.getState().previewPath).toBe('/pv.md')
+  })
+
+  it('pinTab pins the preview and ignores other paths', async () => {
+    const useStore = await freshStore()
+    useStore.setState({ previewPath: '/pv.md' })
+    useStore.getState().pinTab('/other.md')
+    expect(useStore.getState().previewPath).toBe('/pv.md')
+    useStore.getState().pinTab('/pv.md')
+    expect(useStore.getState().previewPath).toBeNull()
+  })
+
+  it('closing the preview tab clears previewPath', async () => {
+    const useStore = await freshStore()
+    useStore.setState({
+      activePath: '/a.md',
+      tabs: ['/a.md', '/pv.md'],
+      previewPath: '/pv.md',
+      stash: { '/pv.md': snap('PV') },
+      content: 'A',
+      savedContent: 'A'
+    })
+    useStore.getState().closeTab('/pv.md')
+    expect(useStore.getState().previewPath).toBeNull()
+  })
+
+  it('closing the active preview tab clears previewPath', async () => {
+    const useStore = await freshStore()
+    useStore.setState({ activePath: '/pv.md', tabs: ['/pv.md'], previewPath: '/pv.md', content: 'PV', savedContent: 'PV' })
+    useStore.getState().closeTab()
+    expect(useStore.getState().previewPath).toBeNull()
+    expect(useStore.getState().tabs).toEqual([])
+  })
+
+  it('renamePath follows the preview tab', async () => {
+    const useStore = await freshStore()
+    useStore.setState({ activePath: '/a.md', tabs: ['/a.md'], previewPath: '/a.md' })
+    useStore.getState().renamePath('/a.md', '/b.md')
+    expect(useStore.getState().previewPath).toBe('/b.md')
+  })
+
+  it('setWorkspace keeps a surviving preview and clears a pruned one', async () => {
+    const useStore = await freshStore()
+    useStore.setState({
+      activePath: '/w/a.md',
+      tabs: ['/w/a.md'],
+      previewPath: '/w/a.md',
+      content: 'A',
+      savedContent: 'A'
+    })
+    useStore.getState().setWorkspace([folder('/w', [file('/w/a.md')])])
+    expect(useStore.getState().previewPath).toBe('/w/a.md')
+    useStore.getState().setWorkspace([folder('/w', [file('/w/b.md')])])
+    expect(useStore.getState().previewPath).toBeNull()
   })
 })
 
@@ -587,5 +861,308 @@ describe('filter + external changes + conflicts', () => {
     await useStore.getState().resolveConflict('mine')
     expect(orchidMock.writeFile).toHaveBeenCalledWith('/a.md', 'mine')
     expect(useStore.getState().conflict).toBe(false)
+  })
+
+  it('flags a dirty background tab with a conflict for later', async () => {
+    const useStore = await freshStore()
+    useStore.setState({
+      activePath: '/a.md',
+      tabs: ['/a.md', '/b.md'],
+      stash: { '/b.md': snap('draft', 'saved') }
+    })
+    useStore.getState().onExternalChange('/b.md')
+    expect(useStore.getState().stash['/b.md'].conflict).toBe(true)
+    expect(orchidMock.readFile).not.toHaveBeenCalled()
+  })
+
+  it('quietly reloads a clean background tab', async () => {
+    const useStore = await freshStore()
+    useStore.setState({
+      activePath: '/a.md',
+      tabs: ['/a.md', '/b.md'],
+      stash: { '/b.md': snap('old') }
+    })
+    orchidMock.readFile.mockResolvedValue('fresh')
+    useStore.getState().onExternalChange('/b.md')
+    await vi.waitFor(() => expect(useStore.getState().stash['/b.md'].content).toBe('fresh'))
+    expect(useStore.getState().stash['/b.md'].savedContent).toBe('fresh')
+  })
+
+  it('ignores a background reload that fails', async () => {
+    const useStore = await freshStore()
+    useStore.setState({ tabs: ['/a.md', '/b.md'], activePath: '/a.md', stash: { '/b.md': snap('old') } })
+    orchidMock.readFile.mockRejectedValue(new Error('gone'))
+    useStore.getState().onExternalChange('/b.md')
+    await new Promise((r) => setTimeout(r, 0))
+    expect(useStore.getState().stash['/b.md'].content).toBe('old')
+  })
+})
+
+describe('closeTab', () => {
+  it('no-ops when there is nothing to close', async () => {
+    const useStore = await freshStore()
+    expect(useStore.getState().closeTab()).toBe(true)
+    expect(useStore.getState().closeTab('/not-open.md')).toBe(true)
+  })
+
+  it('closes a clean active tab and lands on its right-hand neighbour', async () => {
+    const useStore = await freshStore()
+    useStore.setState({
+      activePath: '/b.md',
+      tabs: ['/a.md', '/b.md', '/c.md'],
+      stash: { '/a.md': snap('A'), '/c.md': snap('C') },
+      content: 'B',
+      savedContent: 'B'
+    })
+    expect(useStore.getState().closeTab()).toBe(true)
+    const s = useStore.getState()
+    expect(s.tabs).toEqual(['/a.md', '/c.md'])
+    expect(s.activePath).toBe('/c.md')
+    expect(s.content).toBe('C')
+    expect(s.stash['/c.md']).toBeUndefined()
+  })
+
+  it('lands on the left neighbour when the closed tab was last in the strip', async () => {
+    const useStore = await freshStore()
+    useStore.setState({
+      activePath: '/b.md',
+      tabs: ['/a.md', '/b.md'],
+      stash: { '/a.md': snap('A') },
+      content: 'B',
+      savedContent: 'B'
+    })
+    useStore.getState().closeTab()
+    expect(useStore.getState().activePath).toBe('/a.md')
+    expect(useStore.getState().content).toBe('A')
+  })
+
+  it('clears the document when the only tab closes', async () => {
+    const useStore = await freshStore()
+    useStore.setState({ activePath: '/a.md', tabs: ['/a.md'], content: 'A', savedContent: 'A', editMode: true })
+    useStore.getState().closeTab()
+    const s = useStore.getState()
+    expect(s.tabs).toEqual([])
+    expect(s.activePath).toBeNull()
+    expect(s.content).toBe('')
+    expect(s.editMode).toBe(false)
+  })
+
+  it('falls back to a blank document when the next tab has no stash', async () => {
+    const useStore = await freshStore()
+    useStore.setState({ activePath: '/a.md', tabs: ['/a.md', '/b.md'], content: 'A', savedContent: 'A' })
+    useStore.getState().closeTab('/a.md')
+    expect(useStore.getState().activePath).toBe('/b.md')
+    expect(useStore.getState().content).toBe('')
+  })
+
+  it('closes a background tab without touching the active document', async () => {
+    const useStore = await freshStore()
+    useStore.setState({
+      activePath: '/a.md',
+      tabs: ['/a.md', '/b.md'],
+      stash: { '/b.md': snap('B') },
+      content: 'A',
+      savedContent: 'A'
+    })
+    useStore.getState().closeTab('/b.md')
+    const s = useStore.getState()
+    expect(s.tabs).toEqual(['/a.md'])
+    expect(s.activePath).toBe('/a.md')
+    expect(s.content).toBe('A')
+    expect(s.stash['/b.md']).toBeUndefined()
+  })
+
+  it('closes a background tab that has no stashed state', async () => {
+    const useStore = await freshStore()
+    useStore.setState({ activePath: '/a.md', tabs: ['/a.md', '/b.md'], content: 'A', savedContent: 'A' })
+    expect(useStore.getState().closeTab('/b.md')).toBe(true)
+    expect(useStore.getState().tabs).toEqual(['/a.md'])
+  })
+
+  it('confirms before closing a dirty active tab, and keeps it on cancel', async () => {
+    const useStore = await freshStore()
+    useStore.setState({ activePath: '/a.md', tabs: ['/a.md'], content: 'edited', savedContent: 'orig' })
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(false)
+    expect(useStore.getState().closeTab()).toBe(false)
+    expect(useStore.getState().tabs).toEqual(['/a.md'])
+    confirm.mockRestore()
+  })
+
+  it('closes a dirty tab when the discard is confirmed', async () => {
+    const useStore = await freshStore()
+    useStore.setState({ activePath: '/a.md', tabs: ['/a.md'], content: 'edited', savedContent: 'orig' })
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(true)
+    expect(useStore.getState().closeTab()).toBe(true)
+    expect(useStore.getState().tabs).toEqual([])
+    confirm.mockRestore()
+  })
+
+  it('confirms for a dirty background tab too', async () => {
+    const useStore = await freshStore()
+    useStore.setState({
+      activePath: '/a.md',
+      tabs: ['/a.md', '/b.md'],
+      stash: { '/b.md': snap('draft', 'saved') },
+      content: 'A',
+      savedContent: 'A'
+    })
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(false)
+    expect(useStore.getState().closeTab('/b.md')).toBe(false)
+    expect(useStore.getState().tabs).toEqual(['/a.md', '/b.md'])
+    confirm.mockRestore()
+  })
+})
+
+describe('cycleTab', () => {
+  it('wraps forward and backward through the tabs', async () => {
+    const useStore = await freshStore()
+    useStore.setState({
+      activePath: '/c.md',
+      tabs: ['/a.md', '/b.md', '/c.md'],
+      stash: { '/a.md': snap('A'), '/b.md': snap('B') },
+      content: 'C',
+      savedContent: 'C'
+    })
+    useStore.getState().cycleTab(1) // wraps from the end to the start
+    await vi.waitFor(() => expect(useStore.getState().activePath).toBe('/a.md'))
+    useStore.getState().cycleTab(-1) // and back
+    await vi.waitFor(() => expect(useStore.getState().activePath).toBe('/c.md'))
+  })
+
+  it('does nothing with fewer than two tabs or no active tab', async () => {
+    const useStore = await freshStore()
+    useStore.setState({ activePath: '/a.md', tabs: ['/a.md'] })
+    useStore.getState().cycleTab(1)
+    expect(useStore.getState().activePath).toBe('/a.md')
+    useStore.setState({ activePath: null, tabs: ['/a.md', '/b.md'] })
+    useStore.getState().cycleTab(1)
+    expect(useStore.getState().activePath).toBeNull()
+  })
+})
+
+describe('moveTab', () => {
+  it('reorders the tab strip', async () => {
+    const useStore = await freshStore()
+    useStore.setState({ tabs: ['/a.md', '/b.md', '/c.md'] })
+    useStore.getState().moveTab(0, 2)
+    expect(useStore.getState().tabs).toEqual(['/b.md', '/c.md', '/a.md'])
+    useStore.getState().moveTab(2, 0)
+    expect(useStore.getState().tabs).toEqual(['/a.md', '/b.md', '/c.md'])
+  })
+
+  it('ignores no-op and out-of-range moves', async () => {
+    const useStore = await freshStore()
+    useStore.setState({ tabs: ['/a.md', '/b.md'] })
+    useStore.getState().moveTab(1, 1)
+    useStore.getState().moveTab(-1, 0)
+    useStore.getState().moveTab(0, -1)
+    useStore.getState().moveTab(5, 0)
+    useStore.getState().moveTab(0, 5)
+    expect(useStore.getState().tabs).toEqual(['/a.md', '/b.md'])
+  })
+})
+
+describe('saveAll', () => {
+  it('writes every dirty background tab and the active document', async () => {
+    const useStore = await freshStore()
+    useStore.setState({
+      activePath: '/a.md',
+      tabs: ['/a.md', '/b.md', '/c.md'],
+      stash: { '/b.md': snap('draft', 'saved', { conflict: true }), '/c.md': snap('C') },
+      content: 'edited',
+      savedContent: 'orig'
+    })
+    orchidMock.writeFile.mockResolvedValue(true)
+    await useStore.getState().saveAll()
+    expect(orchidMock.writeFile).toHaveBeenCalledWith('/b.md', 'draft')
+    expect(orchidMock.writeFile).toHaveBeenCalledWith('/a.md', 'edited')
+    expect(orchidMock.writeFile).not.toHaveBeenCalledWith('/c.md', 'C')
+    const s = useStore.getState()
+    expect(s.stash['/b.md'].savedContent).toBe('draft')
+    expect(s.stash['/b.md'].conflict).toBe(false)
+    expect(s.savedContent).toBe('edited')
+  })
+
+  it('does nothing when nothing is dirty', async () => {
+    const useStore = await freshStore()
+    useStore.setState({ activePath: null, stash: { '/b.md': snap('B') } })
+    await useStore.getState().saveAll()
+    expect(orchidMock.writeFile).not.toHaveBeenCalled()
+  })
+
+  it('keeps a tab dirty when its write fails, and still saves the rest', async () => {
+    const useStore = await freshStore()
+    useStore.setState({
+      activePath: '/a.md',
+      tabs: ['/a.md', '/b.md'],
+      stash: { '/b.md': snap('draft', 'saved') },
+      content: 'clean',
+      savedContent: 'clean'
+    })
+    orchidMock.writeFile.mockRejectedValue(new Error('disk full'))
+    await useStore.getState().saveAll()
+    expect(useStore.getState().stash['/b.md'].savedContent).toBe('saved')
+  })
+})
+
+describe('tabs across workspace changes and renames', () => {
+  it('renamePath rewrites tab paths and stashed state', async () => {
+    const useStore = await freshStore()
+    useStore.setState({
+      activePath: '/w/other.md',
+      tabs: ['/w/other.md', '/w/a.md'],
+      stash: { '/w/a.md': snap('A-draft', 'A') }
+    })
+    useStore.getState().renamePath('/w/a.md', '/w/b.md')
+    const s = useStore.getState()
+    expect(s.tabs).toEqual(['/w/other.md', '/w/b.md'])
+    expect(s.stash['/w/b.md'].content).toBe('A-draft')
+    expect(s.stash['/w/a.md']).toBeUndefined()
+  })
+
+  it('setWorkspace drops tabs whose files left, falling back to a surviving tab', async () => {
+    const useStore = await freshStore()
+    useStore.setState({
+      activePath: '/w/gone.md',
+      tabs: ['/w/gone.md', '/w/b.md'],
+      stash: { '/w/b.md': snap('B') },
+      content: 'G',
+      savedContent: 'G'
+    })
+    useStore.getState().setWorkspace([folder('/w', [file('/w/b.md')])])
+    const s = useStore.getState()
+    expect(s.tabs).toEqual(['/w/b.md'])
+    expect(s.activePath).toBe('/w/b.md')
+    expect(s.content).toBe('B')
+    expect(s.stash).toEqual({})
+  })
+
+  it('setWorkspace falls back to a blank doc when the surviving tab has no stash', async () => {
+    const useStore = await freshStore()
+    useStore.setState({
+      activePath: '/w/gone.md',
+      tabs: ['/w/gone.md', '/w/b.md'],
+      content: 'G',
+      savedContent: 'G'
+    })
+    useStore.getState().setWorkspace([folder('/w', [file('/w/b.md')])])
+    expect(useStore.getState().activePath).toBe('/w/b.md')
+    expect(useStore.getState().content).toBe('')
+  })
+
+  it('setWorkspace prunes a background tab while keeping the active one', async () => {
+    const useStore = await freshStore()
+    useStore.setState({
+      activePath: '/w/a.md',
+      tabs: ['/w/a.md', '/w/gone.md'],
+      stash: { '/w/gone.md': snap('bye') },
+      content: 'A',
+      savedContent: 'A'
+    })
+    useStore.getState().setWorkspace([folder('/w', [file('/w/a.md')])])
+    const s = useStore.getState()
+    expect(s.tabs).toEqual(['/w/a.md'])
+    expect(s.activePath).toBe('/w/a.md')
+    expect(s.stash).toEqual({})
   })
 })
