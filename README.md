@@ -62,8 +62,10 @@ Press Return, then open Orchid normally. You only ever need this once.
 ## Features
 
 **Navigate**
+- **Tabs** — every open file gets a tab. Single-click *browses* in one reusable preview tab (italic title, so skimming never piles up tabs); **double-click** (or ⌥-click, or right-click → *Open in New Tab*) keeps a file in its own tab, and editing pins a preview automatically. `⌘W` closes a tab, `⌃Tab` cycles, `⌘1`–`⌘9` jump, drag to reorder.
+- **Multiple windows** — **File → New Window** (`⌥⌘N`) opens an independent window with its own folders and tabs. Two projects, side by side.
 - **Folder-native** — open a folder and the sidebar shows your Markdown (and code/text files), nested structure preserved, noise (`node_modules`, dotfiles) hidden.
-- **Multi-folder workspaces** — keep several folders open at once, each a collapsible section. Add, close, or remove folders any time. Open a single file too.
+- **Multi-folder workspaces** — keep several folders open at once, each a collapsible section. Add, close, or remove folders any time. Opening a single file adds it alongside them.
 - **Pinned files** — pin your go-to files to a section at the top of the sidebar (right-click, or the pin that appears on hover).
 - **Keyboard navigation** — with the sidebar focused, `↑`/`↓` move through files; `⇧↑`/`⇧↓` and `⇧-click` extend a multi-file selection.
 - **Sort** — a compact menu: **Name (A–Z)** or **Recently edited**; every file shows a relative timestamp.
@@ -79,8 +81,8 @@ Press Return, then open Orchid normally. You only ever need this once.
 
 **Create & edit**
 - **New files** (`⌘N`) and **folders** (`⌘⇧N`) — from the menu or the sidebar `+`; code files get syntax highlighting; extension-less files default to `.txt`.
-- **Manage files** — **rename** (or double-click), **duplicate**, **move** by dragging onto a folder, **copy path / relative path**, and **delete to Trash** with **multi-select** — all from right-click.
-- **Light editing** — `⌘E` toggles a CodeMirror editor with a scroll-synced live preview (the cursor lands ready to type); `⌘S` saves. Full cut / copy / paste / undo (keyboard **and** right-click), and an Edit menu. Prompts before losing unsaved edits.
+- **Manage files** — **rename**, **duplicate**, **move** by dragging onto a folder, **copy path / relative path**, and **delete to Trash** with **multi-select** — all from right-click.
+- **Light editing** — `⌘E` toggles a CodeMirror editor with a scroll-synced live preview (the cursor lands ready to type); `⌘S` saves. Full cut / copy / paste / undo (keyboard **and** right-click), and an Edit menu. Unsaved edits live safely in their tab — switching files never loses them, and closing offers to save.
 - **Export** — self-contained **HTML** or **PDF** with a customisable header, footer, and page numbers; always rendered light for clean printing and sharing.
 
 **Stay current**
@@ -110,6 +112,10 @@ Orchid follows your system appearance — **Bloom** (light) and **Dusk** (dark) 
 |---|---|
 | Open a folder or file | `⌘O` |
 | Add a folder to the workspace | `⇧⌘O` |
+| New window | `⌥⌘N` |
+| Close tab | `⌘W` |
+| Next / previous tab | `⌃Tab` / `⌃⇧Tab` |
+| Jump to tab *n* (last: `⌘9`) | `⌘1`–`⌘9` |
 | Refresh (re-scan) | `⌘R` |
 | Jump to a file | `⌘P` |
 | Find in this file | `⌘F` |

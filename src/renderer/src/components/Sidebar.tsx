@@ -239,7 +239,7 @@ function TreeNodes({
   const pinned = useStore((s) => s.pinned)
   const togglePin = useStore((s) => s.togglePin)
   const renaming = useStore((s) => s.renaming)
-  const setRenaming = useStore((s) => s.setRenaming)
+  const selectFile = useStore((s) => s.selectFile)
   const commitMove = useStore((s) => s.commitMove)
 
   const dropProps = (
@@ -375,7 +375,11 @@ function TreeNodes({
                 e.dataTransfer.effectAllowed = 'move'
               }}
               onClick={(e) => onFileClick(e, n.path)}
-              onDoubleClick={() => !selectMode && setRenaming(n.path)}
+              onDoubleClick={() => {
+                // double-click keeps the file open in its own tab (rename
+                // lives in the right-click menu)
+                if (!selectMode) void selectFile(n.path, { newTab: true })
+              }}
               onContextMenu={(e) => {
                 e.preventDefault()
                 window.orchid.fileMenu(n.path, { pinned: isPinned, isFolder: false })
@@ -491,7 +495,6 @@ function FolderSection({
   const selectFile = useStore((s) => s.selectFile)
   const pinned = useStore((s) => s.pinned)
   const renaming = useStore((s) => s.renaming)
-  const setRenaming = useStore((s) => s.setRenaming)
   const commitMove = useStore((s) => s.commitMove)
   const shown = useMemo(() => sortTree(filterTree(folder.tree, filter), sortMode), [folder.tree, filter, sortMode])
   const isCollapsed = collapsed.has(folder.root)
@@ -510,7 +513,7 @@ function FolderSection({
           <div
             className={`node single ${activePath === f.path ? 'active' : ''}`}
             onClick={() => selectFile(f.path)}
-            onDoubleClick={() => setRenaming(f.path)}
+            onDoubleClick={() => void selectFile(f.path, { newTab: true })}
             onContextMenu={(e) => {
               e.preventDefault()
               window.orchid.fileMenu(f.path, { pinned: pinned.includes(f.path), isFolder: false })
@@ -671,7 +674,8 @@ export default function Sidebar(): JSX.Element {
       anchorRef.current = path
       setCursor(path)
     } else {
-      void selectFile(path)
+      // ⌥-click opens the file in a new tab; a plain click reuses the current one
+      void selectFile(path, { newTab: e.altKey })
       anchorRef.current = path
       setCursor(path)
     }
@@ -761,7 +765,7 @@ export default function Sidebar(): JSX.Element {
     try {
       if (mode === 'file') {
         const path = await window.orchid.createFile(dialogDir, name)
-        await selectFile(path)
+        await selectFile(path, { newTab: true }) // a brand-new file always gets its own tab
         useStore.getState().setEditMode(true) // new files open ready to type
       } else {
         await window.orchid.createFolder(dialogDir, name)

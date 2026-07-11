@@ -61,6 +61,9 @@ export interface OrchidApi {
   resetShortcuts: () => Promise<{ defs: ShortcutDef[]; map: Record<string, string> }>
   setDirty: (dirty: boolean) => void
   confirmClose: () => void
+  newWindow: () => Promise<void>
+  closeWindow: () => void
+  getWorkspace: () => Promise<{ folders: WorkspaceFolder[] }>
   onWorkspaceChanged: (cb: (p: { folders: WorkspaceFolder[]; select?: string }) => void) => () => void
   onFileChanged: (cb: (p: { path: string }) => void) => () => void
   onTreeChanged: (cb: (p: { path?: string }) => void) => () => void
@@ -79,6 +82,9 @@ export interface OrchidApi {
   onShortcuts: (cb: () => void) => () => void
   onSettings: (cb: () => void) => () => void
   onCommandPalette: (cb: () => void) => () => void
+  onNextTab: (cb: () => void) => () => void
+  onPrevTab: (cb: () => void) => () => void
+  onOpenInNewTab: (cb: (path: string) => void) => () => void
   onEditUndo: (cb: () => void) => () => void
   onEditRedo: (cb: () => void) => () => void
   onShortcutsChanged: (cb: (p: { defs: ShortcutDef[]; map: Record<string, string> }) => void) => () => void

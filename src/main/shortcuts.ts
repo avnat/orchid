@@ -10,11 +10,14 @@ export interface ShortcutDef {
 }
 
 export const SHORTCUT_DEFS: ShortcutDef[] = [
+  { id: 'newWindow', label: 'New Window', defaultAccelerator: 'CmdOrCtrl+Alt+N' },
   { id: 'newFile', label: 'New File', defaultAccelerator: 'CmdOrCtrl+N' },
   { id: 'newFolder', label: 'New Folder', defaultAccelerator: 'CmdOrCtrl+Shift+N' },
   { id: 'open', label: 'Open', defaultAccelerator: 'CmdOrCtrl+O' },
   { id: 'addFolder', label: 'Add Folder to Workspace', defaultAccelerator: 'CmdOrCtrl+Shift+O' },
-  { id: 'closeFile', label: 'Close File', defaultAccelerator: 'CmdOrCtrl+W' },
+  { id: 'closeFile', label: 'Close Tab', defaultAccelerator: 'CmdOrCtrl+W' },
+  { id: 'nextTab', label: 'Show Next Tab', defaultAccelerator: 'Control+Tab' },
+  { id: 'prevTab', label: 'Show Previous Tab', defaultAccelerator: 'Control+Shift+Tab' },
   { id: 'refresh', label: 'Refresh', defaultAccelerator: 'CmdOrCtrl+R' },
   { id: 'toggleEdit', label: 'Toggle Edit Mode', defaultAccelerator: 'CmdOrCtrl+E' },
   { id: 'save', label: 'Save', defaultAccelerator: 'CmdOrCtrl+S' },

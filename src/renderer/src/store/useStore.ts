@@ -21,9 +21,49 @@ const lsSet = (k: string, v: string): void => {
   }
 }
 
+/**
+ * A background tab's document state. The ACTIVE tab lives in the top-level
+ * fields (content, savedContent, editMode, conflict, unsupported) so every
+ * existing consumer keeps reading "the open document" — switching tabs stashes
+ * the outgoing document here and restores the incoming one.
+ */
+export interface TabSnapshot {
+  content: string
+  savedContent: string
+  editMode: boolean
+  conflict: boolean
+  unsupported: boolean
+}
+
+const blankDoc: TabSnapshot = {
+  content: '',
+  savedContent: '',
+  editMode: false,
+  conflict: false,
+  unsupported: false
+}
+
+const snapOf = (s: TabSnapshot): TabSnapshot => ({
+  content: s.content,
+  savedContent: s.savedContent,
+  editMode: s.editMode,
+  conflict: s.conflict,
+  unsupported: s.unsupported
+})
+
 interface OrchidState {
   folders: WorkspaceFolder[]
   activePath: string | null
+  /** ordered paths of the open tabs (the active file is one of them) */
+  tabs: string[]
+  /** background tabs' document state, keyed by path (never holds the active tab) */
+  stash: Record<string, TabSnapshot>
+  /**
+   * The preview tab (italic title): single-click browsing reuses this one slot
+   * instead of piling up tabs. It pins itself — becoming a regular tab — when
+   * edited or opened deliberately (double-click / Open in New Tab).
+   */
+  previewPath: string | null
   /** content as shown (may include unsaved edits) */
   content: string
   /** content last loaded from / saved to disk */
@@ -71,10 +111,19 @@ interface OrchidState {
   setRenaming: (path: string | null) => void
   commitRename: (oldPath: string, newName: string) => Promise<void>
   commitMove: (src: string, destDir: string) => Promise<void>
-  selectFile: (path: string) => Promise<void>
+  selectFile: (path: string, opts?: { newTab?: boolean }) => Promise<void>
+  /** Close a tab (the active one by default). Returns false if the user kept it. */
+  closeTab: (path?: string) => boolean
+  /** Turn the preview tab into a regular tab (no-op for any other path). */
+  pinTab: (path: string) => void
+  /** Switch to the neighbouring tab (1 = next, -1 = previous), wrapping around. */
+  cycleTab: (dir: 1 | -1) => void
+  moveTab: (from: number, to: number) => void
   reloadActive: () => Promise<void>
   setContent: (content: string) => void
   save: () => Promise<void>
+  /** Save every dirty tab (used by the window-close guard). */
+  saveAll: () => Promise<void>
   toggleEdit: () => void
   setEditMode: (on: boolean) => void
   toggleFocus: () => void
@@ -109,6 +158,9 @@ function flatHas(nodes: WorkspaceFolder['tree'], path: string): boolean {
 export const useStore = create<OrchidState>((set, get) => ({
   folders: [],
   activePath: null,
+  tabs: [],
+  stash: {},
+  previewPath: null,
   content: '',
   savedContent: '',
   editMode: false,
@@ -144,17 +196,33 @@ export const useStore = create<OrchidState>((set, get) => ({
       const pinned = s.pinned.filter((p) => folders.some((f) => flatHas(f.tree, p)))
       const pinnedChanged = pinned.length !== s.pinned.length
       if (pinnedChanged) lsSet('orchid.pinned', JSON.stringify(pinned))
+      // drop tabs whose files no longer exist (the active one survives while a
+      // select is in flight — it's about to be replaced anyway)
+      const keep = (p: string): boolean =>
+        folders.some((f) => flatHas(f.tree, p)) || (!!select && p === s.activePath)
+      const tabs = s.tabs.filter(keep)
+      const stash: Record<string, TabSnapshot> = {}
+      for (const [p, snap] of Object.entries(s.stash)) if (keep(p)) stash[p] = snap
+      // if the active file vanished, fall back to a surviving tab, else empty
+      let active = {}
+      if (s.activePath && !keep(s.activePath)) {
+        const i = s.tabs.indexOf(s.activePath)
+        const next = tabs.length ? tabs[Math.min(Math.max(i, 0), tabs.length - 1)] : null
+        if (next) {
+          active = { activePath: next, ...(stash[next] ?? blankDoc) }
+          delete stash[next]
+        } else {
+          active = { activePath: null, ...blankDoc, focusMode: false }
+        }
+      }
       return {
         folders,
+        tabs,
+        stash,
+        previewPath: s.previewPath && tabs.includes(s.previewPath) ? s.previewPath : null,
         ...(pinnedChanged ? { pinned } : {}),
         selected: [],
-        // drop active selection (and any edit/conflict state) if its file no
-        // longer exists in the workspace
-        ...(select
-          ? {}
-          : s.activePath && !folders.some((f) => flatHas(f.tree, s.activePath!))
-            ? { activePath: null, content: '', savedContent: '', editMode: false, conflict: false, focusMode: false }
-            : {})
+        ...active
       }
     }),
   setSortMode: (mode) => {
@@ -196,9 +264,17 @@ export const useStore = create<OrchidState>((set, get) => ({
     set((s) => {
       const pinned = s.pinned.map((p) => (p === oldPath ? newPath : p))
       if (pinned.some((p, i) => p !== s.pinned[i])) lsSet('orchid.pinned', JSON.stringify(pinned))
+      let stash = s.stash
+      if (oldPath in s.stash) {
+        stash = { ...s.stash, [newPath]: s.stash[oldPath] }
+        delete stash[oldPath]
+      }
       return {
         pinned,
-        ...(s.activePath === oldPath ? { activePath: newPath } : {})
+        stash,
+        tabs: s.tabs.map((p) => (p === oldPath ? newPath : p)),
+        ...(s.activePath === oldPath ? { activePath: newPath } : {}),
+        ...(s.previewPath === oldPath ? { previewPath: newPath } : {})
       }
     }),
   setRenaming: (renaming) => set({ renaming }),
@@ -222,26 +298,123 @@ export const useStore = create<OrchidState>((set, get) => ({
     }
   },
 
-  selectFile: async (path) => {
+  selectFile: async (path, opts) => {
     const s = get()
-    // guard against silently dropping unsaved edits when switching files
-    if (s.activePath && path !== s.activePath && dirty(s)) {
-      const ok = window.confirm('Discard unsaved changes to the current file?')
-      if (!ok) return
+    if (path === s.activePath) {
+      // a deliberate open (double-click / Open in New Tab) pins the preview tab
+      if (opts?.newTab && s.previewPath === path) set({ previewPath: null })
+      return
     }
+
+    // Already open in a tab — just switch to it (its edits were stashed).
+    if (s.tabs.includes(path)) {
+      const stash = { ...s.stash }
+      if (s.activePath) stash[s.activePath] = snapOf(s)
+      const snap = stash[path] ?? blankDoc
+      delete stash[path]
+      set({
+        activePath: path,
+        stash,
+        selected: [],
+        ...snap,
+        ...(opts?.newTab && s.previewPath === path ? { previewPath: null } : {})
+      })
+      return
+    }
+
+    // Single-click browsing reuses the one preview slot; a deliberate open
+    // ({newTab}) always gets its own tab. The preview tab pins itself when
+    // edited, so it is never dirty — a dirty one (defensive) counts as pinned.
+    const pv = s.previewPath
+    const pvOpen = !opts?.newTab && !!pv && s.tabs.includes(pv)
+    const pvDirty =
+      pvOpen &&
+      (pv === s.activePath
+        ? dirty(s)
+        : s.stash[pv!]
+          ? s.stash[pv!].content !== s.stash[pv!].savedContent
+          : false)
+    const stash = { ...s.stash }
+    let tabs: string[]
+    let previewPath: string | null
+    if (pvOpen && !pvDirty) {
+      // browse: the new file takes over the preview slot
+      tabs = s.tabs.map((t) => (t === pv ? path : t))
+      if (pv !== s.activePath) {
+        if (s.activePath) stash[s.activePath] = snapOf(s)
+        delete stash[pv!]
+      }
+      previewPath = path
+    } else {
+      // a fresh tab beside the active one; unsaved edits are never dropped —
+      // the outgoing tab (dirty or pinned) simply stays open in the background
+      if (s.activePath) stash[s.activePath] = snapOf(s)
+      const at = s.activePath ? s.tabs.indexOf(s.activePath) + 1 : s.tabs.length
+      tabs = [...s.tabs.slice(0, at), path, ...s.tabs.slice(at)]
+      previewPath = opts?.newTab ? s.previewPath : path
+    }
+
     // PDFs are rendered by the viewer, not read as text.
     if (isPdfFile(path)) {
-      set({ activePath: path, content: '', savedContent: '', conflict: false, unsupported: false, editMode: false, selected: [] })
+      set({ tabs, stash, previewPath, activePath: path, content: '', savedContent: '', conflict: false, unsupported: false, editMode: false, selected: [] })
       return
     }
     try {
       const text = await window.orchid.readFile(path)
-      set({ activePath: path, content: text, savedContent: text, conflict: false, unsupported: false, selected: [] })
+      set({ tabs, stash, previewPath, activePath: path, content: text, savedContent: text, conflict: false, unsupported: false, selected: [] })
     } catch {
       // binary / unsupported file — show a friendly message instead of garbage
-      set({ activePath: path, content: '', savedContent: '', conflict: false, unsupported: true, editMode: false, selected: [] })
+      set({ tabs, stash, previewPath, activePath: path, content: '', savedContent: '', conflict: false, unsupported: true, editMode: false, selected: [] })
     }
   },
+
+  pinTab: (path) => set((s) => (s.previewPath === path ? { previewPath: null } : {})),
+
+  closeTab: (path) => {
+    const s = get()
+    const target = path ?? s.activePath
+    if (!target || !s.tabs.includes(target)) return true
+    const snap = s.stash[target]
+    const isDirty =
+      target === s.activePath ? dirty(s) : !!snap && snap.content !== snap.savedContent
+    const name = target.slice(target.lastIndexOf('/') + 1)
+    if (isDirty && !window.confirm(`Discard unsaved changes to "${name}"?`)) return false
+    const i = s.tabs.indexOf(target)
+    const tabs = s.tabs.filter((t) => t !== target)
+    const stash = { ...s.stash }
+    delete stash[target]
+    const preview = target === s.previewPath ? { previewPath: null } : {}
+    if (target !== s.activePath) {
+      set({ tabs, stash, ...preview })
+      return true
+    }
+    // closing the active tab: land on its right-hand neighbour, else the last tab
+    const next = tabs.length ? tabs[Math.min(i, tabs.length - 1)] : null
+    if (!next) {
+      set({ tabs, stash, activePath: null, ...blankDoc, ...preview })
+      return true
+    }
+    const nextSnap = stash[next] ?? blankDoc
+    delete stash[next]
+    set({ tabs, stash, activePath: next, selected: [], ...nextSnap, ...preview })
+    return true
+  },
+
+  cycleTab: (dir) => {
+    const s = get()
+    if (s.tabs.length < 2 || !s.activePath) return
+    const i = s.tabs.indexOf(s.activePath)
+    void get().selectFile(s.tabs[(i + dir + s.tabs.length) % s.tabs.length])
+  },
+
+  moveTab: (from, to) =>
+    set((s) => {
+      if (from === to || from < 0 || to < 0 || from >= s.tabs.length || to >= s.tabs.length) return {}
+      const tabs = [...s.tabs]
+      const [t] = tabs.splice(from, 1)
+      tabs.splice(to, 0, t)
+      return { tabs }
+    }),
 
   reloadActive: async () => {
     const { activePath } = get()
@@ -250,13 +423,34 @@ export const useStore = create<OrchidState>((set, get) => ({
     set({ content: text, savedContent: text, conflict: false })
   },
 
-  setContent: (content) => set({ content }),
+  // Typing in the preview tab pins it — those edits deserve a tab of their own.
+  setContent: (content) =>
+    set((s) => ({
+      content,
+      ...(s.activePath && s.activePath === s.previewPath ? { previewPath: null } : {})
+    })),
 
   save: async () => {
     const { activePath, content } = get()
     if (!activePath) return
     await window.orchid.writeFile(activePath, content)
     set({ savedContent: content, conflict: false })
+  },
+
+  saveAll: async () => {
+    const s = get()
+    for (const [p, snap] of Object.entries(s.stash)) {
+      if (snap.content === snap.savedContent) continue
+      try {
+        await window.orchid.writeFile(p, snap.content)
+        set((st) => ({
+          stash: { ...st.stash, [p]: { ...snap, savedContent: snap.content, conflict: false } }
+        }))
+      } catch {
+        /* keep that tab dirty — never block the others */
+      }
+    }
+    if (s.activePath && dirty(s)) await get().save()
   },
 
   toggleEdit: () => set((s) => ({ editMode: !s.editMode })),
@@ -308,11 +502,29 @@ export const useStore = create<OrchidState>((set, get) => ({
 
   onExternalChange: (path) => {
     const s = get()
-    if (path !== s.activePath) return
-    if (dirty(s)) {
-      set({ conflict: true }) // surface the banner; let the user choose
+    if (path === s.activePath) {
+      if (dirty(s)) {
+        set({ conflict: true }) // surface the banner; let the user choose
+      } else {
+        void get().reloadActive() // not editing — reload live
+      }
+      return
+    }
+    // a background tab: dirty ones get a conflict flag (the banner shows when
+    // the tab is activated), clean ones quietly pick up the new content
+    const snap = s.stash[path]
+    if (!snap) return
+    if (snap.content !== snap.savedContent) {
+      set((st) => ({ stash: { ...st.stash, [path]: { ...snap, conflict: true } } }))
     } else {
-      void get().reloadActive() // not editing — reload live
+      window.orchid
+        .readFile(path)
+        .then((text) =>
+          set((st) => ({
+            stash: { ...st.stash, [path]: { ...snap, content: text, savedContent: text } }
+          }))
+        )
+        .catch(() => {})
     }
   },
 

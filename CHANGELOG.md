@@ -2,6 +2,29 @@
 
 All notable changes to **Orchid**. Newest first. Built for macOS (Apple Silicon).
 
+## 2.0.0 — 2026-07-12
+
+Orchid grows up: **tabs and multiple windows.**
+
+**Added**
+- **Tabs.** Every open file lives in a tab above the reading pane. Single-clicking in the sidebar *browses* — files share one reusable **preview tab** (shown in italics) so skimming a folder never piles up tabs. **Double-click a file** (or ⌥-click, or right-click → **Open in New Tab**) to give it a tab that sticks, and a preview tab **pins itself the moment you edit** — unsaved work always keeps its own tab. Close with `⌘W`, the ×, or middle-click; drag tabs to reorder; double-click a preview tab to pin it.
+- **Tab keyboard control** — `⌃Tab` / `⌃⇧Tab` cycle tabs (Window menu: Show Next / Previous Tab), `⌘1`–`⌘8` jump to a tab, `⌘9` jumps to the last one.
+- **Multiple windows.** **File → New Window** (`⌥⌘N`, remappable in Settings) opens an independent window with its own folders, tabs, and file watching — keep two projects side by side. New windows cascade from the current one.
+- **No more "discard changes?" interruptions when switching files.** Edits now simply stay alive in their background tab; the prompt only appears if you close that tab without saving.
+- **Unsaved edits in any tab are guarded on close** — closing a window offers to save every dirty tab, not just the visible one.
+- **Background tabs stay fresh** — a file changed on disk quietly reloads in its background tab (or raises the conflict banner there if it has unsaved edits, shown when you return to it).
+
+**Changed**
+- **`⌘W` is now Close Tab** (closes the window once no tabs are left).
+- **Opening a single file no longer closes your folders** — it joins the workspace as its own sidebar entry (and its tab), instead of replacing everything.
+- **Rename moved fully to right-click → Rename…** — double-clicking a file now opens it in its own tab. (Renaming from the menu is unchanged.)
+- New files created with `⌘N` open in their own tab, ready to type.
+
+**Under the hood**
+- The main process now tracks state per window (workspace, file watcher, unsaved-changes guard, crash auto-reload) — groundwork for anything multi-window that comes next.
+- A freshly loaded window pulls its workspace from the main process, so a crash-recovery reload lands you back where you were.
+- 213 unit tests, still at 100% coverage of the logic layer.
+
 ## 1.3.2 — 2026-06-30
 
 **Reliability**
