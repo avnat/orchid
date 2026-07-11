@@ -9,7 +9,11 @@ export default function EmptyState(): JSX.Element {
   return (
     <div className="empty">
       <div className="lockup">
-        <OrchidMark size={82} />
+        {/* the glow lives on the static wrapper — filtering the spinning SVG
+            itself makes Chromium rasterize it into a blurry bitmap */}
+        <div className="mark">
+          <OrchidMark size={82} />
+        </div>
         <span className="wordmark">Orchid</span>
         <p className="tagline">A calm, native reader for the Markdown your tools generate.</p>
       </div>

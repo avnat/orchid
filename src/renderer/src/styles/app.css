@@ -2054,9 +2054,12 @@
   gap: 6px;
   margin-bottom: 38px;
 }
+/* No glow behind the mark: a filter on the spinning SVG made Chromium
+   rasterize it (blurry logo + a visible rounded patch on some themes), and a
+   replacement halo read as a circle. The flower stands on its own. */
 .empty .lockup svg {
-  filter: drop-shadow(0 8px 22px color-mix(in srgb, var(--accent) 38%, transparent));
   animation: orchid-spin 34s linear infinite;
+  will-change: transform; /* composite at device resolution — stays vector-crisp */
 }
 @keyframes orchid-spin {
   from {
@@ -2064,6 +2067,11 @@
   }
   to {
     transform: rotate(360deg);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .empty .lockup svg {
+    animation: none;
   }
 }
 .empty .wordmark {
