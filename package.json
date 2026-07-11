@@ -1,6 +1,6 @@
 {
   "name": "orchid",
-  "version": "2.0.0",
+  "version": "2.0.1",
   "description": "A subtle, native macOS reading surface for your markdown.",
   "main": "./out/main/index.js",
   "author": "avnee",

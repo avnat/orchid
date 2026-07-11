@@ -2,6 +2,11 @@
 
 All notable changes to **Orchid**. Newest first. Built for macOS (Apple Silicon).
 
+## 2.0.1 — 2026-07-12
+
+**Fixed**
+- **The launch-screen logo is sharp again.** The glow effect on the slowly-spinning flower made the renderer freeze the vector art into a bitmap — on some themes it showed up blurry, with a faint rounded patch behind it. The glow is gone and the flower now renders as pure, always-crisp vector art (and the spin respects Reduce Motion).
+
 ## 2.0.0 — 2026-07-12
 
 Orchid grows up: **tabs and multiple windows.**
