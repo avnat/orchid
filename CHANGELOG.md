@@ -6,6 +6,10 @@ All notable changes to **Orchid**. Newest first. Built for macOS (Apple Silicon)
 
 **Fixed**
 - **The launch-screen logo is sharp again.** The glow effect on the slowly-spinning flower made the renderer freeze the vector art into a bitmap — on some themes it showed up blurry, with a faint rounded patch behind it. The glow is gone and the flower now renders as pure, always-crisp vector art (and the spin respects Reduce Motion).
+- **Quit now actually quits.** Quitting (⌘Q, or right-click the Dock icon → Quit) with unsaved edits used to be silently swallowed: the save prompt cancelled the quit, and answering it only closed the window — Orchid stayed in the Dock. The quit now resumes after you choose Save or Don't Save (Cancel still keeps everything open), and the save prompt brings its window to the front so it can't hide on another Space.
+
+**Under the hood**
+- **The app is less than half the size: 419 MB → 225 MB installed, and the download shrinks 156 MB → 99 MB.** The installer had been shipping the entire JavaScript dependency tree (~9,700 files) alongside the already-bundled app code — everything except the file-watcher was dead weight, packed twice. Nothing visible changes: Markdown, Mermaid, KaTeX, PDF reading, and live file watching all verified on the packaged build.
 
 ## 2.0.0 — 2026-07-12
 
