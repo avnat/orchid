@@ -30,6 +30,14 @@ interface WinState {
 
 const winStates = new Map<number, WinState>()
 
+// True while a Quit (⌘Q / Dock right-click → Quit) is in flight. A window's
+// unsaved-changes guard prevents its close, which silently cancels the whole
+// quit — this flag lets us resume the quit once every window has closed.
+let quitting = false
+app.on('before-quit', () => {
+  quitting = true
+})
+
 function stateFor(win: BrowserWindow | null | undefined): WinState | null {
   return win ? (winStates.get(win.id) ?? null) : null
 }
@@ -358,30 +366,42 @@ function createWindow(): BrowserWindow {
   win.on('close', (e) => {
     if (!st.unsavedChanges || st.forceClose || win.isDestroyed()) return
     e.preventDefault()
-    dialog
-      .showMessageBox(win, {
-        type: 'warning',
-        buttons: ['Save', "Don't Save", 'Cancel'],
-        defaultId: 0,
-        cancelId: 2,
-        message: 'Save changes before closing?',
-        detail: "Your edits will be lost if you don't save them."
-      })
+    // The dialog must actually be seen — the window may be minimized or on
+    // another Space when the user quits from the Dock.
+    if (win.isMinimized()) win.restore()
+    win.show()
+    win.focus()
+    // Headless test hook: native dialogs can't be clicked by the E2E harness.
+    const testResponse = process.env['ORCHID_TEST_CLOSE_RESPONSE']
+    const answer = testResponse
+      ? Promise.resolve({ response: Number(testResponse) })
+      : dialog.showMessageBox(win, {
+          type: 'warning',
+          buttons: ['Save', "Don't Save", 'Cancel'],
+          defaultId: 0,
+          cancelId: 2,
+          message: 'Save changes before closing?',
+          detail: "Your edits will be lost if you don't save them."
+        })
+    answer
       .then(({ response }) => {
         if (response === 0) sendToWin(st, 'app:save-and-close')
         else if (response === 1) {
           st.forceClose = true
           if (!win.isDestroyed()) win.close()
+        } else {
+          quitting = false // Cancel aborts an in-flight Quit
         }
-        // response === 2 (Cancel): stay open
       })
   })
 
   // Drop the per-window state once the window is gone, so background listeners
-  // (e.g. nativeTheme) don't touch a destroyed window.
+  // (e.g. nativeTheme) don't touch a destroyed window. If a Quit was paused by
+  // the unsaved-changes dialog, resume it once the last window is gone.
   win.on('closed', () => {
     stopWatching(win)
     winStates.delete(win.id)
+    if (quitting && winStates.size === 0) app.quit()
   })
 
   // The renderer crashed (gone / OOM / GPU) — report it, then auto-recover by
