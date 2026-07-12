@@ -2,7 +2,9 @@
 
 All notable changes to **Orchid**. Newest first. Built for macOS (Apple Silicon).
 
-## Unreleased
+## 2.1.0 — 2026-07-12
+
+Navigation & sidebar polish.
 
 **Added**
 - **Right-click a tab** for the standard close menu: **Close**, **Close Others**, **Close to the Right**, **Close to the Left**, **Close All** (a single prompt covers any unsaved tabs in the batch).
