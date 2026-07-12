@@ -1291,6 +1291,39 @@
   background: var(--accent);
   display: none;
 }
+/* Right-click tab menu (close this / others / right / left / all). */
+.tab-menu {
+  position: fixed;
+  z-index: 60;
+  min-width: 172px;
+  padding: 4px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  box-shadow: var(--shadow);
+}
+.tab-menu-item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 6px 10px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text);
+  font-size: 12.5px;
+  cursor: pointer;
+}
+.tab-menu-item:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  color: var(--accent);
+}
+.tab-menu-item:disabled {
+  color: var(--muted);
+  opacity: 0.5;
+  cursor: default;
+}
+
 /* a dirty tab shows the dot where the × sits; hovering swaps the × back in */
 .tab.dirty:not(:hover) .tab-dot {
   display: inline-block;

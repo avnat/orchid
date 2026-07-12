@@ -4,6 +4,9 @@ All notable changes to **Orchid**. Newest first. Built for macOS (Apple Silicon)
 
 ## Unreleased
 
+**Added**
+- **Right-click a tab** for the standard close menu: **Close**, **Close Others**, **Close to the Right**, **Close to the Left**, **Close All** (a single prompt covers any unsaved tabs in the batch).
+
 **Changed**
 - **`⌘W` now always just closes the tab** — exactly like the tab's ×. It never exits to the launch screen; with no tabs open it closes the window.
 - **Sidebar footer** — the sort picker moved to the bottom of the sidebar, and **+ Add folder** became **+ Add folder or file**: pick either in one dialog, and it always joins what's already open.
