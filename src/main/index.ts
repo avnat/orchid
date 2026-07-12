@@ -869,6 +869,7 @@ app.whenReady().then(async () => {
           const img = await firstWin.webContents.capturePage()
           await fs.writeFile(shotPath, img.toPNG())
           console.log('ORCHID_SHOT written to', shotPath)
+          app.quit() // harness done — never linger as a blank window
         }, 1400)
       }
     })
@@ -883,6 +884,7 @@ app.whenReady().then(async () => {
         const img = await firstWin.webContents.capturePage()
         await fs.writeFile(shotPath, img.toPNG())
         console.log('ORCHID_SHOT written to', shotPath)
+        app.quit() // harness done — never linger as a blank window
       }, 1200)
     })
   }
