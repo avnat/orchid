@@ -7,9 +7,10 @@ function baseName(p: string): string {
 
 /**
  * The open-files tab strip above the main pane. Click switches, × / middle-click
- * closes, drag reorders, double-click pins the preview tab (italic title).
- * Dirty tabs show a dot where the × sits (the × returns on hover). Tabs whose
- * names collide are disambiguated with their parent folder.
+ * closes, drag reorders, double-click pins the preview tab (no visual marker —
+ * it simply stops being reused by browsing). Dirty tabs show a dot where the ×
+ * sits (the × returns on hover). Tabs whose names collide are disambiguated
+ * with their parent folder.
  */
 export default function TabBar(): JSX.Element | null {
   const tabs = useStore((s) => s.tabs)
