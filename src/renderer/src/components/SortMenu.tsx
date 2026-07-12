@@ -7,8 +7,9 @@ const LABELS: Record<SortMode, string> = {
 }
 const ORDER: SortMode[] = ['recent', 'name']
 
-/** Compact sort picker: a labelled trigger that opens a small checkmarked menu. */
-export default function SortMenu(): JSX.Element {
+/** Compact sort picker: a labelled trigger that opens a small checkmarked menu.
+ *  `up` opens the menu above the trigger (for the sidebar footer). */
+export default function SortMenu({ up = false }: { up?: boolean }): JSX.Element {
   const sortMode = useStore((s) => s.sortMode)
   const setSortMode = useStore((s) => s.setSortMode)
   const [open, setOpen] = useState(false)
@@ -48,7 +49,7 @@ export default function SortMenu(): JSX.Element {
         </span>
       </button>
       {open && (
-        <div className="sort-pop" role="menu">
+        <div className={`sort-pop ${up ? 'up' : ''}`} role="menu">
           {ORDER.map((m) => (
             <button
               key={m}

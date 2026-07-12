@@ -182,6 +182,78 @@ function PinIcon(): JSX.Element {
   )
 }
 
+/** Shared 16px stroke-icon shell so the toolbar reads as one consistent set. */
+function Icon({ children }: { children: React.ReactNode }): JSX.Element {
+  return (
+    <svg
+      viewBox="0 0 16 16"
+      width="16"
+      height="16"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.4"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      {children}
+    </svg>
+  )
+}
+
+/** Folder disclosure chevron — rotated by CSS on .group/.collapsed. */
+function Chevron(): JSX.Element {
+  return (
+    <svg
+      viewBox="0 0 16 16"
+      width="13"
+      height="13"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.7"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M5.5 3.5 10.5 8l-5 4.5" />
+    </svg>
+  )
+}
+
+const NewFileIcon = (
+  <Icon>
+    <path d="M9.2 1.8H4.6A1.1 1.1 0 0 0 3.5 2.9v10.2a1.1 1.1 0 0 0 1.1 1.1h6.8a1.1 1.1 0 0 0 1.1-1.1V5.1z" />
+    <path d="M9.2 1.8v3.3h3.3" />
+    <path d="M8 7.6v3.4M6.3 9.3h3.4" />
+  </Icon>
+)
+const SelectIcon = (
+  <Icon>
+    <rect x="2.8" y="2.8" width="10.4" height="10.4" rx="2.4" />
+    <path d="M5.6 8.2l1.7 1.7 3.2-3.6" />
+  </Icon>
+)
+const CollapseAllIcon = (
+  <Icon>
+    <path d="M4.4 10 8 6.4l3.6 3.6" />
+    <path d="M4.4 13.6 8 10l3.6 3.6" />
+    <path d="M4.4 3.2h7.2" />
+  </Icon>
+)
+const ExpandAllIcon = (
+  <Icon>
+    <path d="M4.4 6 8 9.6 11.6 6" />
+    <path d="M4.4 2.4 8 6l3.6-3.6" />
+    <path d="M4.4 12.8h7.2" />
+  </Icon>
+)
+const RefreshIcon = (
+  <Icon>
+    <path d="M13 8a5 5 0 1 1-1.66-3.72" />
+    <path d="M13.2 2.6v3h-3" />
+  </Icon>
+)
+
 /** Inline rename field, shared by the tree and the single-file row. */
 function RenameInput({ path }: { path: string }): JSX.Element {
   const commitRename = useStore((s) => s.commitRename)
@@ -270,7 +342,8 @@ function TreeNodes({
   return (
     <>
       {nodes.map((n) => {
-        const pad = { paddingLeft: 9 + depth * 12 }
+        // --depth drives the indent guides (one thin line per ancestor level)
+        const pad = { paddingLeft: 9 + depth * 12, '--depth': depth } as React.CSSProperties
         if (n.type === 'dir') {
           const isCollapsed = collapsed.has(n.path)
           const descPaths = collectPaths(n)
@@ -281,7 +354,9 @@ function TreeNodes({
             <li key={n.path}>
               {renaming === n.path ? (
                 <div className="group" style={pad}>
-                  <span className="twist">▾</span>
+                  <span className="twist">
+                    <Chevron />
+                  </span>
                   <RenameInput path={n.path} />
                 </div>
               ) : (
@@ -290,6 +365,7 @@ function TreeNodes({
                     dropTarget === n.path ? 'drop-target' : ''
                   }`}
                   style={pad}
+                  title={n.path}
                   onClick={() => (selectMode ? toggleDir() : toggle(n.path))}
                   onContextMenu={(e) => {
                     e.preventDefault()
@@ -316,7 +392,7 @@ function TreeNodes({
                       toggle(n.path)
                     }}
                   >
-                    ▾
+                    <Chevron />
                   </span>
                   <span className="group-name">{n.name}</span>
                   {!selectMode && (
@@ -367,7 +443,7 @@ function TreeNodes({
             <div
               className={`node ${activePath === n.path ? 'active' : ''} ${fileSel ? 'selected' : ''}`}
               style={pad}
-              title={n.name}
+              title={n.path}
               data-path={n.path}
               draggable={!selectMode}
               onDragStart={(e) => {
@@ -512,6 +588,7 @@ function FolderSection({
         ) : (
           <div
             className={`node single ${activePath === f.path ? 'active' : ''}`}
+            title={f.path}
             onClick={() => selectFile(f.path)}
             onDoubleClick={() => void selectFile(f.path, { newTab: true })}
             onContextMenu={(e) => {
@@ -559,7 +636,7 @@ function FolderSection({
         }}
       >
         <span className="twist" onClick={() => toggle(folder.root)}>
-          ▾
+          <Chevron />
         </span>
         <span className="folder-name" onClick={() => toggle(folder.root)} title={folder.root}>
           {folder.name}
@@ -786,7 +863,6 @@ export default function Sidebar(): JSX.Element {
           onChange={(e) => setFilter(e.target.value)}
         />
         <div className="side-trow">
-          <SortMenu />
           <button
             className="side-refresh"
             title="New file or folder"
@@ -794,7 +870,7 @@ export default function Sidebar(): JSX.Element {
             disabled={folders.length === 0}
             onClick={() => folders[0] && onNew(folders[0].root)}
           >
-            +
+            {NewFileIcon}
           </button>
           <button
             className={`side-refresh ${selectMode ? 'on' : ''}`}
@@ -802,7 +878,7 @@ export default function Sidebar(): JSX.Element {
             aria-label="Select"
             onClick={() => setSelectMode(!selectMode)}
           >
-            ☑
+            {SelectIcon}
           </button>
           <button
             className="side-refresh"
@@ -811,10 +887,10 @@ export default function Sidebar(): JSX.Element {
             disabled={allDirs.length === 0}
             onClick={toggleAll}
           >
-            {allCollapsed ? '⊞' : '⊟'}
+            {allCollapsed ? ExpandAllIcon : CollapseAllIcon}
           </button>
           <button className="side-refresh" title="Refresh (⌘R)" aria-label="Refresh" onClick={() => window.orchid.refresh()}>
-            ↻
+            {RefreshIcon}
           </button>
         </div>
       </div>
@@ -860,9 +936,14 @@ export default function Sidebar(): JSX.Element {
             setDropTarget={setDropTarget}
           />
         ))}
-        <button className="add-folder" onClick={() => window.orchid.addFolder()}>
-          + Add folder
+      </div>
+
+      {/* Fixed footer: additive open (never closes what's already open) + sort. */}
+      <div className="side-footer">
+        <button className="add-folder" onClick={() => window.orchid.addAny()}>
+          + Add folder or file
         </button>
+        <SortMenu up />
       </div>
 
       <NameDialog

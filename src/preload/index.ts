@@ -32,6 +32,7 @@ const api = {
   // actions
   open: (): Promise<void> => ipcRenderer.invoke('dialog:open'),
   addFolder: (): Promise<void> => ipcRenderer.invoke('dialog:addFolder'),
+  addAny: (): Promise<void> => ipcRenderer.invoke('dialog:addAny'),
   openPath: (path: string): Promise<void> => ipcRenderer.invoke('workspace:openPath', path),
   closeFolder: (root: string): Promise<void> => ipcRenderer.invoke('workspace:closeFolder', root),
   refresh: (): Promise<void> => ipcRenderer.invoke('workspace:refresh'),
@@ -41,7 +42,6 @@ const api = {
   trash: (path: string): Promise<boolean> => ipcRenderer.invoke('fs:trash', path),
   trashMany: (paths: string[]): Promise<boolean> => ipcRenderer.invoke('fs:trashMany', paths),
   rename: (path: string, newName: string): Promise<string> => ipcRenderer.invoke('fs:rename', path, newName),
-  duplicate: (path: string): Promise<string> => ipcRenderer.invoke('fs:duplicate', path),
   move: (src: string, destDir: string): Promise<string> => ipcRenderer.invoke('fs:move', src, destDir),
   fileMenu: (path: string, opts?: { pinned?: boolean; isFolder?: boolean }): Promise<void> =>
     ipcRenderer.invoke('fs:fileMenu', path, opts),

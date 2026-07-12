@@ -2,6 +2,21 @@
 
 All notable changes to **Orchid**. Newest first. Built for macOS (Apple Silicon).
 
+## Unreleased
+
+**Changed**
+- **`⌘W` now always just closes the tab** — exactly like the tab's ×. It never exits to the launch screen; with no tabs open it closes the window.
+- **Sidebar footer** — the sort picker moved to the bottom of the sidebar, and **+ Add folder** became **+ Add folder or file**: pick either in one dialog, and it always joins what's already open.
+- **Clearer folder tree** — proper disclosure chevrons in an aligned gutter (rotating › / ⌄, visible contrast) plus subtle indent guides, so nesting reads at a glance.
+- **Crisper toolbar** — the sidebar tools (new file, multi-select, collapse/expand all, refresh) are now real icons instead of text glyphs.
+- **`⌘P` understands paths** — match on the file name or anywhere in the path: `notes/prd`, `no prd`, or any scattered abbreviation. Name hits rank first; files already open in a tab float up.
+- **Hover a file to see where it lives** — file and folder rows show the absolute path on hover, and the right-click **Copy Path / Copy Relative Path** items show exactly what they'll put on the clipboard.
+- The **Editing** badge only appears while editing — no more permanent READING pill.
+
+**Removed**
+- **Duplicate** (right-click) — it gave no feedback and little value; copy the file in Finder if you need one.
+- The **?** titlebar button — Keyboard Shortcuts stay under `⌘/` and the Help menu.
+
 ## 2.0.1 — 2026-07-12
 
 **Fixed**

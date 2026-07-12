@@ -131,17 +131,16 @@ export default function App(): JSX.Element {
       }),
       window.orchid.onExportHtml(() => void doExport('html')),
       window.orchid.onExportPdf(() => setPdfOpen(true)),
-      // ⌘W — close the active tab; with no tabs left it closes the window.
-      // A single-file workspace entry leaves the sidebar with its tab.
+      // ⌘W — identical to the tab's ×: close the tab, nothing else. The
+      // workspace always stays put (never the landing page); with no tabs
+      // left, ⌘W closes the window, macOS-style.
       window.orchid.onCloseFile(() => {
         const st = s()
-        const ap = st.activePath
-        if (!ap) {
+        if (!st.activePath) {
           window.orchid.closeWindow()
           return
         }
-        const folder = st.folders.find((f) => ap === f.root || ap.startsWith(f.root + '/'))
-        if (st.closeTab(ap) && folder?.isFile) void window.orchid.closeFolder(folder.root)
+        st.closeTab(st.activePath)
       }),
       window.orchid.onNextTab(() => s().cycleTab(1)),
       window.orchid.onPrevTab(() => s().cycleTab(-1)),
@@ -306,10 +305,12 @@ export default function App(): JSX.Element {
         </div>
         <div className="title">
           <span className="title-text">{title}</span>
-          {activePath && (
-            <span className={`mode-badge ${editMode ? 'is-editing' : 'is-reading'}`} aria-live="polite">
+          {/* the badge only appears while editing — that's when keystrokes
+              change the file; quiet reading needs no label */}
+          {activePath && editMode && (
+            <span className="mode-badge is-editing" aria-live="polite">
               <span className="mode-dot" aria-hidden="true" />
-              {editMode ? 'Editing' : 'Reading'}
+              Editing
             </span>
           )}
         </div>
@@ -347,14 +348,6 @@ export default function App(): JSX.Element {
             aria-label="Settings"
           >
             ⚙
-          </button>
-          <button
-            className="tbtn icon"
-            onClick={() => setShortcutsOpen(true)}
-            title="Keyboard shortcuts (⌘/)"
-            aria-label="Keyboard shortcuts"
-          >
-            ?
           </button>
         </div>
       </div>

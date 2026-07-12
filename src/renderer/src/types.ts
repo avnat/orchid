@@ -23,6 +23,7 @@ export interface ShortcutDef {
 export interface OrchidApi {
   open: () => Promise<void>
   addFolder: () => Promise<void>
+  addAny: () => Promise<void>
   openPath: (path: string) => Promise<void>
   closeFolder: (root: string) => Promise<void>
   refresh: () => Promise<void>
@@ -32,7 +33,6 @@ export interface OrchidApi {
   trash: (path: string) => Promise<boolean>
   trashMany: (paths: string[]) => Promise<boolean>
   rename: (path: string, newName: string) => Promise<string>
-  duplicate: (path: string) => Promise<string>
   move: (src: string, destDir: string) => Promise<string>
   fileMenu: (path: string, opts?: { pinned?: boolean; isFolder?: boolean }) => Promise<void>
   readFile: (path: string) => Promise<string>

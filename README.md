@@ -71,7 +71,7 @@ Press Return, then open Orchid normally. You only ever need this once.
 - **Sort** — a compact menu: **Name (A–Z)** or **Recently edited**; every file shows a relative timestamp.
 - **Live** — new and changed files appear automatically; a **Refresh** button re-scans on demand.
 - **Collapse / expand all** — one click in the sidebar toolbar to fold every folder, or open them all back up.
-- **Find fast** — `⌘P` fuzzy switcher · `⌘⇧F` full-text search across folders · `⌘F` find-in-file · a scroll-spy table of contents with adjustable text size.
+- **Find fast** — `⌘P` fuzzy switcher (matches names **and** full paths — `notes/prd`, or terms like `no prd`) · `⌘⇧F` full-text search across folders · `⌘F` find-in-file · a scroll-spy table of contents with adjustable text size.
 
 **Read**
 - **Rich preview** — GFM tables, task lists, syntax-highlighted code, callouts, images, a frontmatter header, **KaTeX math**, and **Mermaid diagrams**.
@@ -81,7 +81,7 @@ Press Return, then open Orchid normally. You only ever need this once.
 
 **Create & edit**
 - **New files** (`⌘N`) and **folders** (`⌘⇧N`) — from the menu or the sidebar `+`; code files get syntax highlighting; extension-less files default to `.txt`.
-- **Manage files** — **rename**, **duplicate**, **move** by dragging onto a folder, **copy path / relative path**, and **delete to Trash** with **multi-select** — all from right-click.
+- **Manage files** — **rename**, **move** by dragging onto a folder, **copy path / relative path** (the menu shows exactly what you'll copy), and **delete to Trash** with **multi-select** — all from right-click.
 - **Light editing** — `⌘E` toggles a CodeMirror editor with a scroll-synced live preview (the cursor lands ready to type); `⌘S` saves. Full cut / copy / paste / undo (keyboard **and** right-click), and an Edit menu. Unsaved edits live safely in their tab — switching files never loses them, and closing offers to save.
 - **Export** — self-contained **HTML** or **PDF** with a customisable header, footer, and page numbers; always rendered light for clean printing and sharing.
 
