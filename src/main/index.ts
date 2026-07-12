@@ -752,6 +752,7 @@ app.whenReady().then(async () => {
   app.setAboutPanelOptions({
     applicationName: 'Orchid',
     applicationVersion: app.getVersion(),
+    version: '', // hide the parenthetical build number — it would repeat the version
     copyright: '© 2026 Avnee · MIT',
     credits: 'A calm, native macOS reader for the Markdown your tools generate.'
   })
