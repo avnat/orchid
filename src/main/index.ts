@@ -752,6 +752,7 @@ app.whenReady().then(async () => {
   app.setAboutPanelOptions({
     applicationName: 'Orchid',
     applicationVersion: app.getVersion(),
+    version: '', // hide the parenthetical build number — it would repeat the version
     copyright: '© 2026 Avnee · MIT',
     credits: 'A calm, native macOS reader for the Markdown your tools generate.'
   })
@@ -868,6 +869,7 @@ app.whenReady().then(async () => {
           const img = await firstWin.webContents.capturePage()
           await fs.writeFile(shotPath, img.toPNG())
           console.log('ORCHID_SHOT written to', shotPath)
+          app.quit() // harness done — never linger as a blank window
         }, 1400)
       }
     })
@@ -882,6 +884,7 @@ app.whenReady().then(async () => {
         const img = await firstWin.webContents.capturePage()
         await fs.writeFile(shotPath, img.toPNG())
         console.log('ORCHID_SHOT written to', shotPath)
+        app.quit() // harness done — never linger as a blank window
       }, 1200)
     })
   }

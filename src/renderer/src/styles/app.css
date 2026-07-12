@@ -1225,8 +1225,12 @@
   overflow-x: auto;
   scrollbar-width: none;
   flex: none;
-  background: var(--surface);
-  border-bottom: 1px solid var(--line);
+  /* a tone away from the page so the active tab (page-coloured) pops */
+  background: var(--bg);
+  /* the divider is an inset shadow, not a border: the active tab's opaque
+     background covers it, visually connecting the tab to the page (a real
+     border sits outside the scroll container's clip, so tabs can't overlap it) */
+  box-shadow: inset 0 -1px 0 var(--line);
 }
 .tabbar::-webkit-scrollbar {
   display: none;
@@ -1247,14 +1251,14 @@
   border: 1px solid transparent;
   border-bottom: none;
   position: relative;
-  top: 1px;
 }
 .tab:hover {
   background: color-mix(in srgb, var(--text) 5%, transparent);
 }
 .tab.active {
   color: var(--text);
-  background: var(--surface);
+  font-weight: 600;
+  background: var(--surface); /* page colour — covers the divider beneath it */
   border-color: var(--line);
 }
 .tab-label {
