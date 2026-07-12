@@ -1013,6 +1013,131 @@ describe('closeTab', () => {
   })
 })
 
+describe('closeTabs', () => {
+  const seed = (useStore: Awaited<ReturnType<typeof freshStore>>): void =>
+    useStore.setState({
+      activePath: '/c.md',
+      tabs: ['/a.md', '/b.md', '/c.md', '/d.md', '/e.md'],
+      stash: { '/a.md': snap('A'), '/b.md': snap('B'), '/d.md': snap('D'), '/e.md': snap('E') },
+      content: 'C',
+      savedContent: 'C'
+    })
+
+  it('no-ops when none of the paths are open', async () => {
+    const useStore = await freshStore()
+    useStore.setState({ tabs: ['/a.md'], activePath: '/a.md' })
+    expect(useStore.getState().closeTabs([])).toBe(true)
+    expect(useStore.getState().closeTabs(['/nope.md'])).toBe(true)
+    expect(useStore.getState().tabs).toEqual(['/a.md'])
+  })
+
+  it('"close others" keeps only the target and reactivates it if needed', async () => {
+    const useStore = await freshStore()
+    seed(useStore)
+    // close everything except /b.md (a background tab)
+    expect(useStore.getState().closeTabs(['/a.md', '/c.md', '/d.md', '/e.md'])).toBe(true)
+    const s = useStore.getState()
+    expect(s.tabs).toEqual(['/b.md'])
+    expect(s.activePath).toBe('/b.md') // active /c.md was closed → land on survivor
+    expect(s.content).toBe('B')
+    expect(s.stash).toEqual({})
+  })
+
+  it('"close to the right" leaves the active tab untouched', async () => {
+    const useStore = await freshStore()
+    seed(useStore)
+    expect(useStore.getState().closeTabs(['/d.md', '/e.md'])).toBe(true)
+    const s = useStore.getState()
+    expect(s.tabs).toEqual(['/a.md', '/b.md', '/c.md'])
+    expect(s.activePath).toBe('/c.md')
+    expect(s.content).toBe('C') // untouched active document
+  })
+
+  it('lands on the nearest left survivor when everything to the right is closed', async () => {
+    const useStore = await freshStore()
+    seed(useStore)
+    // close the active tab and all to its right → nearest survivor is /b.md (left)
+    expect(useStore.getState().closeTabs(['/c.md', '/d.md', '/e.md'])).toBe(true)
+    expect(useStore.getState().activePath).toBe('/b.md')
+    expect(useStore.getState().content).toBe('B')
+  })
+
+  it('"close all" empties the workspace document', async () => {
+    const useStore = await freshStore()
+    seed(useStore)
+    expect(useStore.getState().closeTabs(['/a.md', '/b.md', '/c.md', '/d.md', '/e.md'])).toBe(true)
+    const s = useStore.getState()
+    expect(s.tabs).toEqual([])
+    expect(s.activePath).toBeNull()
+    expect(s.content).toBe('')
+  })
+
+  it('restores a blank doc when the survivor has no stash', async () => {
+    const useStore = await freshStore()
+    useStore.setState({ activePath: '/a.md', tabs: ['/a.md', '/b.md'], content: 'A', savedContent: 'A' })
+    useStore.getState().closeTabs(['/a.md'])
+    expect(useStore.getState().activePath).toBe('/b.md')
+    expect(useStore.getState().content).toBe('')
+  })
+
+  it('clears previewPath when the preview tab is among those closed', async () => {
+    const useStore = await freshStore()
+    useStore.setState({
+      activePath: '/a.md',
+      tabs: ['/a.md', '/b.md'],
+      previewPath: '/b.md',
+      stash: { '/b.md': snap('B') },
+      content: 'A',
+      savedContent: 'A'
+    })
+    useStore.getState().closeTabs(['/b.md'])
+    expect(useStore.getState().previewPath).toBeNull()
+    expect(useStore.getState().activePath).toBe('/a.md')
+  })
+
+  it('confirms once for several dirty tabs and cancels cleanly', async () => {
+    const useStore = await freshStore()
+    useStore.setState({
+      activePath: '/a.md',
+      tabs: ['/a.md', '/b.md', '/c.md'],
+      stash: { '/b.md': snap('draft', 'saved'), '/c.md': snap('x', 'y') },
+      content: 'A',
+      savedContent: 'A'
+    })
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(false)
+    expect(useStore.getState().closeTabs(['/b.md', '/c.md'])).toBe(false)
+    expect(confirm).toHaveBeenCalledWith('Discard unsaved changes to 2 tabs?')
+    expect(useStore.getState().tabs).toEqual(['/a.md', '/b.md', '/c.md'])
+    confirm.mockRestore()
+  })
+
+  it('uses the named prompt when exactly one closing tab is dirty, and proceeds', async () => {
+    const useStore = await freshStore()
+    useStore.setState({
+      activePath: '/a.md',
+      tabs: ['/a.md', '/b.md'],
+      stash: { '/b.md': snap('draft', 'saved') },
+      content: 'A',
+      savedContent: 'A'
+    })
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(true)
+    expect(useStore.getState().closeTabs(['/b.md'])).toBe(true)
+    expect(confirm).toHaveBeenCalledWith('Discard unsaved changes to "b.md"?')
+    expect(useStore.getState().tabs).toEqual(['/a.md'])
+    confirm.mockRestore()
+  })
+
+  it('treats a dirty active tab as dirty in the batch prompt', async () => {
+    const useStore = await freshStore()
+    useStore.setState({ activePath: '/a.md', tabs: ['/a.md', '/b.md'], content: 'edited', savedContent: 'orig' })
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(true)
+    expect(useStore.getState().closeTabs(['/a.md'])).toBe(true)
+    expect(confirm).toHaveBeenCalledWith('Discard unsaved changes to "a.md"?')
+    expect(useStore.getState().activePath).toBe('/b.md')
+    confirm.mockRestore()
+  })
+})
+
 describe('cycleTab', () => {
   it('wraps forward and backward through the tabs', async () => {
     const useStore = await freshStore()

@@ -114,6 +114,8 @@ interface OrchidState {
   selectFile: (path: string, opts?: { newTab?: boolean }) => Promise<void>
   /** Close a tab (the active one by default). Returns false if the user kept it. */
   closeTab: (path?: string) => boolean
+  /** Close many tabs at once (a single discard prompt covers all dirty ones). */
+  closeTabs: (paths: string[]) => boolean
   /** Turn the preview tab into a regular tab (no-op for any other path). */
   pinTab: (path: string) => void
   /** Switch to the neighbouring tab (1 = next, -1 = previous), wrapping around. */
@@ -397,6 +399,44 @@ export const useStore = create<OrchidState>((set, get) => ({
     const nextSnap = stash[next] ?? blankDoc
     delete stash[next]
     set({ tabs, stash, activePath: next, selected: [], ...nextSnap, ...preview })
+    return true
+  },
+
+  closeTabs: (paths) => {
+    const s = get()
+    const tset = new Set(paths.filter((p) => s.tabs.includes(p)))
+    if (tset.size === 0) return true
+    const isDirty = (p: string): boolean =>
+      p === s.activePath ? dirty(s) : !!s.stash[p] && s.stash[p].content !== s.stash[p].savedContent
+    const dirtyTargets = [...tset].filter(isDirty)
+    if (dirtyTargets.length) {
+      const msg =
+        dirtyTargets.length === 1
+          ? `Discard unsaved changes to "${dirtyTargets[0].slice(dirtyTargets[0].lastIndexOf('/') + 1)}"?`
+          : `Discard unsaved changes to ${dirtyTargets.length} tabs?`
+      if (!window.confirm(msg)) return false
+    }
+    const tabs = s.tabs.filter((t) => !tset.has(t))
+    const stash = { ...s.stash }
+    for (const p of tset) delete stash[p]
+    const previewPath = s.previewPath && tset.has(s.previewPath) ? null : s.previewPath
+    // an untouched active tab keeps everything as-is
+    if (!s.activePath || !tset.has(s.activePath)) {
+      set({ tabs, stash, previewPath })
+      return true
+    }
+    // active tab closed: land on the nearest survivor — to the right first, then left
+    const i = s.tabs.indexOf(s.activePath)
+    const remaining = new Set(tabs)
+    const order = [...s.tabs.slice(i + 1), ...s.tabs.slice(0, i).reverse()]
+    const next = order.find((t) => remaining.has(t)) ?? null
+    if (!next) {
+      set({ tabs, stash, activePath: null, ...blankDoc, previewPath })
+      return true
+    }
+    const nextSnap = stash[next] ?? blankDoc
+    delete stash[next]
+    set({ tabs, stash, activePath: next, selected: [], ...nextSnap, previewPath })
     return true
   },
 
