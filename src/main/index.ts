@@ -219,8 +219,12 @@ async function openFolderDialog(st: WinState, add: boolean): Promise<void> {
   await openFolder(st, result.filePaths[0], add)
 }
 
-/** One dialog that accepts a folder OR a single file (macOS allows both). */
-async function openDialog(st: WinState): Promise<void> {
+/**
+ * One dialog that accepts a folder OR a single file (macOS allows both).
+ * With `add`, a chosen folder joins the workspace instead of replacing it
+ * (files are always additive).
+ */
+async function openDialog(st: WinState, add = false): Promise<void> {
   if (!windowAlive(st)) return
   const result = await dialog.showOpenDialog(st.win, {
     properties: ['openFile', 'openDirectory'],
@@ -231,12 +235,12 @@ async function openDialog(st: WinState): Promise<void> {
       { name: 'All files', extensions: ['*'] },
       { name: 'Markdown & text', extensions: TEXT_EXTENSIONS.map((e) => e.slice(1)) }
     ],
-    message: 'Open a folder or a file'
+    message: add ? 'Add a folder or a file to the workspace' : 'Open a folder or a file'
   })
   if (result.canceled || result.filePaths.length === 0) return
   const p = result.filePaths[0]
   const stat = await fs.stat(p).catch(() => null)
-  if (stat?.isDirectory()) await openFolder(st, p, false)
+  if (stat?.isDirectory()) await openFolder(st, p, add)
   else if (stat?.isFile()) await openFile(st, p) // read-time guardrail handles binary/unsupported
 }
 
@@ -908,6 +912,12 @@ ipcMain.handle('dialog:addFolder', async (e) => {
   if (st) await openFolderDialog(st, true)
 })
 
+// The sidebar's "+ Add folder or file" — like Open, but never closes anything.
+ipcMain.handle('dialog:addAny', async (e) => {
+  const st = stateFromEvent(e)
+  if (st) await openDialog(st, true)
+})
+
 ipcMain.handle('app:new-window', async () => {
   createWindow()
 })
@@ -1025,17 +1035,11 @@ function relWorkspacePath(st: WinState, target: string): string {
   return st.workspace.length > 1 ? join(f.name, rel) : rel
 }
 
-/** Copy a file or folder beside itself as "name copy" (auto-incrementing). */
-async function duplicatePath(target: string): Promise<string> {
-  const st = await fs.stat(target)
-  const dir = dirname(target)
-  const base = basename(target)
-  const ext = st.isDirectory() ? '' : (base.match(/\.[^.]+$/)?.[0] ?? '')
-  const stem = ext ? base.slice(0, -ext.length) : base
-  let dest = join(dir, `${stem} copy${ext}`)
-  for (let i = 2; await exists(dest); i++) dest = join(dir, `${stem} copy ${i}${ext}`)
-  await fs.cp(target, dest, { recursive: true })
-  return dest
+/** Middle-truncate a path for a menu label — the tail is the distinguishing part. */
+function menuPath(p: string, max = 58): string {
+  if (p.length <= max) return p
+  const tail = Math.ceil((max - 1) * 0.62)
+  return p.slice(0, max - 1 - tail) + '…' + p.slice(-tail)
 }
 
 ipcMain.handle('fs:rename', async (e, target: string, newName: string) => {
@@ -1047,11 +1051,6 @@ ipcMain.handle('fs:rename', async (e, target: string, newName: string) => {
   if (await exists(dest)) throw new Error('An item with that name already exists')
   await fs.rename(target, dest)
   return dest
-})
-
-ipcMain.handle('fs:duplicate', async (e, target: string) => {
-  if (!withinWorkspace(stateFromEvent(e), target)) throw new Error('Path outside the workspace')
-  return duplicatePath(target)
 })
 
 ipcMain.handle('fs:move', async (e, src: string, destDir: string) => {
@@ -1082,10 +1081,13 @@ ipcMain.handle('fs:fileMenu', (e, target: string, opts?: { pinned?: boolean; isF
           { type: 'separator' }
         ] as Electron.MenuItemConstructorOptions[])),
     { label: 'Rename…', click: () => send('menu:rename') },
-    { label: 'Duplicate', click: () => duplicatePath(target).catch(() => {}) },
     { type: 'separator' },
-    { label: 'Copy Path', click: () => clipboard.writeText(target) },
-    { label: 'Copy Relative Path', click: () => clipboard.writeText(relWorkspacePath(st, target)) },
+    // show what will land on the clipboard, middle-truncated to keep the menu sane
+    { label: `Copy Path — ${menuPath(target)}`, click: () => clipboard.writeText(target) },
+    {
+      label: `Copy Relative Path — ${menuPath(relWorkspacePath(st, target))}`,
+      click: () => clipboard.writeText(relWorkspacePath(st, target))
+    },
     { type: 'separator' },
     { label: opts?.pinned ? 'Unpin' : 'Pin', click: () => send('menu:pin-toggle') },
     { label: 'Select (for multi-delete)', click: () => send('file:select') },

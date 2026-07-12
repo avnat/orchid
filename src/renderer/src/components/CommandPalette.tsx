@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { MdNode } from '../types'
 import { useStore } from '../store/useStore'
+import { pathMatchScore } from '../lib/pathMatch'
 
 interface FileItem {
   name: string
@@ -16,22 +17,6 @@ function flatten(nodes: MdNode[], out: FileItem[] = []): FileItem[] {
   return out
 }
 
-/** subsequence fuzzy match; returns a score (lower is better) or -1 */
-function fuzzyScore(query: string, target: string): number {
-  if (!query) return 0
-  let qi = 0
-  let score = 0
-  let lastIdx = -1
-  for (let i = 0; i < target.length && qi < query.length; i++) {
-    if (target[i] === query[qi]) {
-      score += i - lastIdx // reward contiguous matches
-      lastIdx = i
-      qi++
-    }
-  }
-  return qi === query.length ? score : -1
-}
-
 export default function CommandPalette({
   open,
   onClose
@@ -40,6 +25,7 @@ export default function CommandPalette({
   onClose: () => void
 }): JSX.Element | null {
   const folders = useStore((s) => s.folders)
+  const tabs = useStore((s) => s.tabs)
   const selectFile = useStore((s) => s.selectFile)
   const [query, setQuery] = useState('')
   const [index, setIndex] = useState(0)
@@ -49,14 +35,18 @@ export default function CommandPalette({
   const files = useMemo(() => folders.flatMap((f) => flatten(f.tree)), [folders])
 
   const results = useMemo(() => {
-    const q = query.toLowerCase()
     return files
-      .map((f) => ({ f, score: fuzzyScore(q, f.relPath.toLowerCase()) }))
+      .map((f) => {
+        let score = pathMatchScore(query, f.name, f.relPath)
+        // files already open in a tab float above equal matches
+        if (score >= 0 && tabs.includes(f.path)) score -= 0.5
+        return { f, score }
+      })
       .filter((r) => r.score >= 0)
-      .sort((a, b) => a.score - b.score)
+      .sort((a, b) => a.score - b.score || a.f.relPath.length - b.f.relPath.length)
       .slice(0, 40)
       .map((r) => r.f)
-  }, [files, query])
+  }, [files, tabs, query])
 
   useEffect(() => {
     if (open) {
@@ -99,7 +89,7 @@ export default function CommandPalette({
         <input
           ref={inputRef}
           className="cmd-input"
-          placeholder="Jump to a file…"
+          placeholder="Jump to a file — name or path, e.g. notes/prd…"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           onKeyDown={onKeyDown}

@@ -446,6 +446,10 @@
   align-items: center;
   gap: 8px;
 }
+/* Without the sort control (now in the footer) the four tools share the row evenly. */
+.side-trow .side-refresh {
+  flex: 1;
+}
 .side-filter {
   flex: 1 1 auto;
   min-width: 0;
@@ -502,6 +506,13 @@
   position: absolute;
   top: calc(100% + 4px);
   left: 0;
+}
+/* In the sidebar footer the menu opens upward. */
+.sort-pop.up {
+  top: auto;
+  bottom: calc(100% + 4px);
+}
+.sort-pop {
   /* Sized to its content (not the narrow trigger) so labels never wrap. */
   right: auto;
   min-width: 168px;
@@ -542,6 +553,9 @@
   flex: none;
   width: 30px;
   height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   border: 1px solid var(--line);
   background: var(--surface);
   color: var(--muted);
@@ -605,10 +619,17 @@
 .folder-head .twist {
   cursor: pointer;
   color: var(--accent);
-  transition: transform 0.15s ease;
+  flex: none;
+  width: 16px;
+  height: 16px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.12s ease;
+  transform: rotate(90deg); /* expanded: pointing down */
 }
 .folder-head.collapsed .twist {
-  transform: rotate(-90deg);
+  transform: rotate(0deg);
 }
 .folder-name {
   flex: 1;
@@ -859,9 +880,18 @@
   color: var(--muted);
   padding: 4px 10px;
 }
+/* Fixed sidebar footer: additive open + the sort picker beneath it. */
+.side-footer {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 10px 10px;
+  border-top: 1px solid var(--line);
+  background: var(--bg);
+}
 .add-folder {
-  width: calc(100% - 4px);
-  margin: 4px 2px;
+  width: 100%;
   padding: 7px;
   border: 1px dashed var(--line);
   background: transparent;
@@ -879,6 +909,28 @@
   margin: 0;
   padding: 0;
 }
+/* PyCharm-style indent guides: one thin line per ancestor level, drawn as a
+   repeating gradient sized by the row's --depth. Rows stack, so per-row
+   segments join into continuous vertical lines. */
+.tree .node,
+.tree .group {
+  position: relative;
+}
+.tree .node::before,
+.tree .group::before {
+  content: '';
+  position: absolute;
+  left: 16px;
+  top: 0;
+  bottom: 0;
+  width: calc(var(--depth, 0) * 12px);
+  background-image: repeating-linear-gradient(
+    to right,
+    color-mix(in srgb, var(--text) 17%, transparent) 0 1px,
+    transparent 1px 12px
+  );
+  pointer-events: none;
+}
 .tree .group {
   font-size: calc(var(--side-font, 14.5px) - 3.5px);
   letter-spacing: 0.08em;
@@ -891,13 +943,25 @@
   cursor: default;
   user-select: none;
 }
+/* Disclosure chevron: a fixed gutter slot so arrows align in columns, sized
+   and coloured to actually be seen (PyCharm-style), rotating › ↔ ⌄. */
 .tree .group .twist {
   cursor: pointer;
-  transition: transform 0.15s ease;
-  display: inline-block;
+  flex: none;
+  width: 16px;
+  height: 16px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: color-mix(in srgb, var(--text) 52%, transparent);
+  transition: transform 0.12s ease, color 0.12s ease;
+  transform: rotate(90deg); /* expanded: pointing down */
+}
+.tree .group:hover .twist {
+  color: var(--text);
 }
 .tree .group.collapsed .twist {
-  transform: rotate(-90deg);
+  transform: rotate(0deg); /* collapsed: pointing right */
 }
 .tree .group .group-name {
   flex: 1;

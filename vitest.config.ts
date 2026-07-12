@@ -29,7 +29,8 @@ export default defineConfig({
         'src/renderer/src/store/useStore.ts',
         'src/renderer/src/markdown/langs.ts',
         'src/renderer/src/markdown/exportDoc.ts',
-        'src/renderer/src/lib/accelerator.ts'
+        'src/renderer/src/lib/accelerator.ts',
+        'src/renderer/src/lib/pathMatch.ts'
       ],
       thresholds: {
         lines: 100,
