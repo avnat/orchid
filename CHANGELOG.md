@@ -12,6 +12,7 @@ All notable changes to **Orchid**. Newest first. Built for macOS (Apple Silicon)
 - **`⌘P` understands paths** — match on the file name or anywhere in the path: `notes/prd`, `no prd`, or any scattered abbreviation. Name hits rank first; files already open in a tab float up.
 - **Hover a file to see where it lives** — file and folder rows show the absolute path on hover, and the right-click **Copy Path / Copy Relative Path** items show exactly what they'll put on the clipboard.
 - The **Editing** badge only appears while editing — no more permanent READING pill.
+- **Preview tabs are no longer italicised** — browsing still reuses one tab; it just looks like every other tab.
 
 **Removed**
 - **Duplicate** (right-click) — it gave no feedback and little value; copy the file in Finder if you need one.

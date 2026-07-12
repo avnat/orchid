@@ -62,7 +62,7 @@ Press Return, then open Orchid normally. You only ever need this once.
 ## Features
 
 **Navigate**
-- **Tabs** — every open file gets a tab. Single-click *browses* in one reusable preview tab (italic title, so skimming never piles up tabs); **double-click** (or ⌥-click, or right-click → *Open in New Tab*) keeps a file in its own tab, and editing pins a preview automatically. `⌘W` closes a tab, `⌃Tab` cycles, `⌘1`–`⌘9` jump, drag to reorder.
+- **Tabs** — every open file gets a tab. Single-click *browses* in one reusable preview tab (so skimming never piles up tabs); **double-click** (or ⌥-click, or right-click → *Open in New Tab*) keeps a file in its own tab, and editing pins a preview automatically. `⌘W` closes a tab, `⌃Tab` cycles, `⌘1`–`⌘9` jump, drag to reorder.
 - **Multiple windows** — **File → New Window** (`⌥⌘N`) opens an independent window with its own folders and tabs. Two projects, side by side.
 - **Folder-native** — open a folder and the sidebar shows your Markdown (and code/text files), nested structure preserved, noise (`node_modules`, dotfiles) hidden.
 - **Multi-folder workspaces** — keep several folders open at once, each a collapsible section. Add, close, or remove folders any time. Opening a single file adds it alongside them.

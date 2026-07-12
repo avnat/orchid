@@ -1291,10 +1291,6 @@
   background: var(--accent);
   display: none;
 }
-/* the preview tab (single-click browsing) reads as provisional */
-.tab.preview .tab-label {
-  font-style: italic;
-}
 /* a dirty tab shows the dot where the × sits; hovering swaps the × back in */
 .tab.dirty:not(:hover) .tab-dot {
   display: inline-block;
