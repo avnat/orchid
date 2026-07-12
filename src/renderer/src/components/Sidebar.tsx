@@ -941,7 +941,10 @@ export default function Sidebar(): JSX.Element {
       {/* Fixed footer: additive open (never closes what's already open) + sort. */}
       <div className="side-footer">
         <button className="add-folder" onClick={() => window.orchid.addAny()}>
-          + Add folder or file
+          <span className="add-ic" aria-hidden="true">
+            +
+          </span>
+          <span>Add folder or file</span>
         </button>
         <SortMenu up />
       </div>
