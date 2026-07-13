@@ -731,6 +731,25 @@ export default function Sidebar(): JSX.Element {
     })
   }
 
+  // Reveal the open file in the tree whenever it changes — however it was opened
+  // (⌘P, search, a tab click): expand its ancestor folders and scroll its
+  // (already highlighted) row into view. Keyed on activePath only, so a folder
+  // the user deliberately collapses stays collapsed.
+  useEffect(() => {
+    if (!activePath) return
+    const dirs = ancestorDirs(activePath, folders)
+    if (dirs.length) {
+      setCollapsed((prev) => {
+        if (dirs.every((d) => !prev.has(d))) return prev // already visible — no churn
+        const next = new Set(prev)
+        dirs.forEach((d) => next.delete(d))
+        return next
+      })
+    }
+    scrollIntoView(activePath)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activePath])
+
   // Centralised row click: plain opens, ⌘/Ctrl toggles, ⇧ extends a contiguous range.
   const onFileClick = (e: React.MouseEvent, path: string): void => {
     if (e.shiftKey) {
