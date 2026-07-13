@@ -65,7 +65,8 @@ export default function CommandPalette({
   if (!open) return null
 
   const choose = (item?: FileItem): void => {
-    if (item) void selectFile(item.path)
+    // a deliberate jump always gets its own tab (never hijacks the preview tab)
+    if (item) void selectFile(item.path, { newTab: true })
     onClose()
   }
 

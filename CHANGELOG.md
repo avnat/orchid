@@ -2,6 +2,12 @@
 
 All notable changes to **Orchid**. Newest first. Built for macOS (Apple Silicon).
 
+## Unreleased
+
+**Changed**
+- **Jump to File (`⌘P`) opens in its own tab** — a deliberate jump no longer replaces the file you were browsing.
+- **The open file is revealed in the sidebar** — whichever way you open it (`⌘P`, search, a tab), its folders expand and its highlighted row scrolls into view.
+
 ## 2.1.0 — 2026-07-12
 
 Navigation & sidebar polish.
