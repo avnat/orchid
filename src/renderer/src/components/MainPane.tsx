@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useRef, lazy, Suspense } from 'react'
+import { useEffect, useMemo, useRef, useState, lazy, Suspense } from 'react'
 import { useStore } from '../store/useStore'
+import type { CursorPos } from './Editor'
 import MarkdownView from '../markdown/MarkdownView'
 import ConflictBanner from './ConflictBanner'
 import Toc from './Toc'
@@ -28,6 +29,28 @@ export default function MainPane(): JSX.Element {
   const scrollerRef = useRef<HTMLDivElement>(null)
   const splitPreviewRef = useRef<HTMLDivElement>(null)
   const splitRef = useRef<HTMLDivElement>(null)
+
+  // Sublime-style caret position for the status bar (set by the editor).
+  const [caret, setCaret] = useState<CursorPos | null>(null)
+  const statusBar = caret && (
+    <div className="editor-statusbar">
+      <span>
+        Line {caret.line}, Column {caret.col}
+      </span>
+      {caret.sel > 0 && <span className="stat-sel">{caret.sel} selected</span>}
+    </div>
+  )
+
+  // Reading a rendered file has no caret, so the bottom bar shows the file's
+  // total line count instead.
+  const lineCount = useMemo(() => (content ? content.split(/\r?\n/).length : 0), [content])
+  const readStatusBar = (
+    <div className="editor-statusbar">
+      <span>
+        {lineCount} {lineCount === 1 ? 'line' : 'lines'}
+      </span>
+    </div>
+  )
 
   // Drag the editor↔preview divider (clamped to 25–75% by the store).
   const startSplitDrag = (e: React.MouseEvent): void => {
@@ -111,9 +134,17 @@ export default function MainPane(): JSX.Element {
         <div className="codeview">
           <Suspense fallback={<div className="editor-loading" />}>
             {/* keyed by path so each tab gets its own editor (and undo history) */}
-            <Editor key={activePath} dark={dark} language={codeLang} readOnly={!editMode} showLineNumbers />
+            <Editor
+              key={activePath}
+              dark={dark}
+              language={codeLang}
+              readOnly={!editMode}
+              showLineNumbers
+              onCursor={setCaret}
+            />
           </Suspense>
         </div>
+        {statusBar}
       </div>
     )
   }
@@ -129,7 +160,13 @@ export default function MainPane(): JSX.Element {
         >
           <div className="pane editor-pane">
             <Suspense fallback={<div className="editor-loading" />}>
-              <Editor key={activePath} dark={dark} onScrollFraction={syncPreview} />
+              <Editor
+                key={activePath}
+                dark={dark}
+                showLineNumbers
+                onScrollFraction={syncPreview}
+                onCursor={setCaret}
+              />
             </Suspense>
           </div>
           <div className="split-divider" onMouseDown={startSplitDrag} aria-hidden="true" />
@@ -147,7 +184,7 @@ export default function MainPane(): JSX.Element {
             <div className="reveal-divider right">
               <button
                 className="divider-btn"
-                title="Show contents"
+                data-tip="Show contents"
                 aria-label="Show table of contents"
                 onClick={() => useStore.getState().toggleToc()}
               >
@@ -157,6 +194,7 @@ export default function MainPane(): JSX.Element {
           )}
         </div>
       )}
+      {editMode ? statusBar : readStatusBar}
     </div>
   )
 }

@@ -1,6 +1,6 @@
 import { app, shell, BrowserWindow, ipcMain, dialog, Menu, nativeTheme, protocol, net, screen, clipboard, crashReporter } from 'electron'
 import { join, resolve, relative, sep, basename, dirname } from 'path'
-import { promises as fs, writeFileSync, readFileSync, readdirSync, statSync } from 'fs'
+import { promises as fs, writeFileSync, readFileSync, readdirSync, statSync, existsSync } from 'fs'
 import { homedir } from 'os'
 import { reportCrash } from './crash-report'
 import { summarizeCrashIps } from './crash-summary'
@@ -9,6 +9,7 @@ import { scanFolder, TEXT_EXTENSIONS, type MdNode } from './fs-scan'
 import { watchPaths, stopWatching } from './watcher'
 import { cmpVersions } from './version'
 import { SHORTCUT_DEFS, mergeShortcuts, sanitizeOverrides, isValidAccelerator } from './shortcuts'
+import { addRecent, pruneRecents, type RecentEntry } from './recents'
 
 const TEXT_RE = new RegExp('\\.(' + TEXT_EXTENSIONS.map((e) => e.slice(1)).join('|') + ')$', 'i')
 
@@ -121,11 +122,139 @@ function withinAnyWorkspace(target: string): boolean {
 function emitWorkspace(st: WinState, select?: string): void {
   sendToWin(st, 'workspace:changed', { folders: st.workspace, select })
   rewatch(st)
+  saveSession(st)
 }
 
 function rewatch(st: WinState): void {
   const paths = st.workspace.map((f) => (f.isFile && f.tree[0] ? f.tree[0].path : f.root))
   watchPaths(paths, st.win)
+}
+
+// ---- Open Recent + last-session restore ----
+const RECENTS_CAP = 20
+
+interface SessionEntry {
+  path: string
+  isFile: boolean
+}
+interface RecentsState {
+  recents: RecentEntry[]
+  lastSession: SessionEntry[]
+}
+
+let recentsState: RecentsState = { recents: [], lastSession: [] }
+// Suppresses recording while we reopen the last workspace on launch, so a
+// restore doesn't reshuffle the recents order.
+let suppressRecents = false
+
+function recentsFile(): string {
+  return join(app.getPath('userData'), 'recents.json')
+}
+
+async function loadRecents(): Promise<void> {
+  try {
+    const raw = JSON.parse(await fs.readFile(recentsFile(), 'utf8')) as Record<string, unknown>
+    const recents = Array.isArray(raw.recents)
+      ? (raw.recents as unknown[]).filter(
+          (e): e is RecentEntry =>
+            !!e &&
+            typeof (e as RecentEntry).path === 'string' &&
+            ((e as RecentEntry).kind === 'folder' || (e as RecentEntry).kind === 'file') &&
+            typeof (e as RecentEntry).name === 'string'
+        )
+      : []
+    const lastSession = Array.isArray(raw.lastSession)
+      ? (raw.lastSession as unknown[])
+          .filter((e): e is SessionEntry => !!e && typeof (e as SessionEntry).path === 'string')
+          .map((e) => ({ path: e.path, isFile: !!e.isFile }))
+      : []
+    recentsState = { recents, lastSession }
+  } catch {
+    recentsState = { recents: [], lastSession: [] }
+  }
+}
+
+async function saveRecents(): Promise<void> {
+  try {
+    await fs.writeFile(recentsFile(), JSON.stringify(recentsState, null, 2), 'utf8')
+  } catch {
+    /* best-effort */
+  }
+}
+
+/** The recents list with dead paths dropped (and persisted if anything changed). */
+function currentRecents(): RecentEntry[] {
+  const pruned = pruneRecents(recentsState.recents, (p) => existsSync(p))
+  if (pruned.length !== recentsState.recents.length) {
+    recentsState.recents = pruned
+    void saveRecents()
+  }
+  return pruned
+}
+
+function recordRecent(target: string, kind: RecentEntry['kind']): void {
+  if (suppressRecents) return
+  recentsState.recents = addRecent(
+    recentsState.recents,
+    { path: target, kind, name: basename(target) || target },
+    RECENTS_CAP
+  )
+  void saveRecents()
+  safeBuildMenu() // refresh the Open Recent submenu
+  broadcast('recents:changed', currentRecents())
+}
+
+/** Remember the focused-window workspace so launch can reopen it. */
+function saveSession(st: WinState): void {
+  const session: SessionEntry[] = st.workspace.map((f) => ({
+    path: f.isFile && f.tree[0] ? f.tree[0].path : f.root,
+    isFile: !!f.isFile
+  }))
+  if (JSON.stringify(session) === JSON.stringify(recentsState.lastSession)) return
+  recentsState.lastSession = session
+  void saveRecents()
+}
+
+function clearRecents(): void {
+  recentsState.recents = []
+  void saveRecents()
+  safeBuildMenu()
+  broadcast('recents:changed', [])
+}
+
+async function openRecent(st: WinState, entry: RecentEntry): Promise<void> {
+  if (!existsSync(entry.path)) {
+    recentsState.recents = recentsState.recents.filter((e) => e.path !== entry.path)
+    void saveRecents()
+    safeBuildMenu()
+    broadcast('recents:changed', currentRecents())
+    if (windowAlive(st)) {
+      await dialog.showMessageBox(st.win, {
+        type: 'warning',
+        buttons: ['OK'],
+        message: 'That item no longer exists',
+        detail: entry.path
+      })
+    }
+    return
+  }
+  if (entry.kind === 'folder') await openFolder(st, entry.path, st.workspace.length > 0)
+  else await openFile(st, entry.path)
+}
+
+/** Reopen the last session's folders/files on a normal launch. */
+async function restoreSession(st: WinState): Promise<void> {
+  const session = recentsState.lastSession.filter((e) => existsSync(e.path))
+  if (session.length === 0) return
+  suppressRecents = true
+  try {
+    for (const e of session) {
+      if (e.isFile) await openFile(st, e.path)
+      else await openFolder(st, e.path, st.workspace.length > 0)
+    }
+  } finally {
+    suppressRecents = false
+  }
 }
 
 async function openFolder(st: WinState, folderPath: string, add = false): Promise<void> {
@@ -138,6 +267,7 @@ async function openFolder(st: WinState, folderPath: string, add = false): Promis
   } else {
     st.workspace = [entry]
   }
+  recordRecent(folderPath, 'folder')
   emitWorkspace(st)
 }
 
@@ -147,8 +277,17 @@ async function openFolder(st: WinState, folderPath: string, add = false): Promis
  * open folders and their tabs stay put.
  */
 async function openFile(st: WinState, filePath: string): Promise<void> {
-  if (!withinWorkspace(st, filePath)) {
-    const dir = dirname(filePath)
+  const target = resolve(filePath)
+  // Only skip adding a loose entry when the file already lives inside an open
+  // FOLDER (it shows in that tree). A single-file entry's root is its parent
+  // dir — but it only lists that one file, so a sibling opened from the same
+  // folder still needs its own row.
+  const inFolder = st.workspace.some((f) => {
+    if (f.isFile) return false
+    const root = resolve(f.root)
+    return target === root || target.startsWith(root + sep)
+  })
+  if (!inFolder) {
     let mtimeMs = 0
     try {
       mtimeMs = (await fs.stat(filePath)).mtimeMs
@@ -162,16 +301,21 @@ async function openFile(st: WinState, filePath: string): Promise<void> {
       type: 'file',
       mtimeMs
     }
-    const entry: WSFolder = { root: dir, name: basename(filePath), tree: [node], isFile: true }
-    const i = st.workspace.findIndex((f) => f.root === dir && f.isFile)
+    const entry: WSFolder = { root: dirname(filePath), name: basename(filePath), tree: [node], isFile: true }
+    // De-dupe on the exact file (re-opening refreshes it), never on the parent
+    // dir — so several loose files from one folder each keep their own row.
+    const i = st.workspace.findIndex((f) => f.isFile && f.tree[0]?.path === filePath)
     if (i >= 0) st.workspace[i] = entry
     else st.workspace.push(entry)
   }
+  recordRecent(filePath, 'file')
   emitWorkspace(st, filePath)
 }
 
-function closeFolder(st: WinState, root: string): void {
-  st.workspace = st.workspace.filter((f) => f.root !== root)
+function closeFolder(st: WinState, id: string): void {
+  // Loose files share a parent-dir root, so close them by their own path;
+  // real folders still close by root.
+  st.workspace = st.workspace.filter((f) => (f.isFile && f.tree[0] ? f.tree[0].path : f.root) !== id)
   emitWorkspace(st)
 }
 
@@ -550,6 +694,18 @@ function safeBuildMenu(): void {
   }
 }
 
+function recentMenuItems(): Electron.MenuItemConstructorOptions[] {
+  const list = currentRecents()
+  if (list.length === 0) return [{ label: 'No Recent Items', enabled: false }]
+  const items: Electron.MenuItemConstructorOptions[] = list.map((e) => ({
+    label: e.kind === 'folder' ? `${e.name}  ▸` : e.name,
+    toolTip: e.path,
+    click: () => void ensureWindow().then((st) => openRecent(st, e))
+  }))
+  items.push({ type: 'separator' }, { label: 'Clear Menu', click: () => clearRecents() })
+  return items
+}
+
 function buildMenu(): void {
   const template: Electron.MenuItemConstructorOptions[] = [
     {
@@ -581,6 +737,7 @@ function buildMenu(): void {
           accelerator: accel('addFolder'),
           click: () => void ensureWindow().then((st) => openFolderDialog(st, true))
         },
+        { label: 'Open Recent', submenu: recentMenuItems() },
         { type: 'separator' },
         { label: 'Jump to File…', accelerator: accel('commandPalette'), click: () => sendToFocused('cmd:command-palette') },
         { label: 'Close Tab', accelerator: accel('closeFile'), click: () => sendToFocused('cmd:close-file') },
@@ -749,6 +906,7 @@ function reportDiagnosticCrashes(): void {
 app.whenReady().then(async () => {
   reportDiagnosticCrashes()
   await loadShortcutOverrides()
+  await loadRecents()
   app.setAboutPanelOptions({
     applicationName: 'Orchid',
     applicationVersion: app.getVersion(),
@@ -889,6 +1047,15 @@ app.whenReady().then(async () => {
     })
   }
 
+  // Reopen the last session on any launch that didn't explicitly say what to
+  // open (ORCHID_OPEN / promo-frame captures opt out).
+  if (!autoOpen && !framesDir) {
+    firstWin.webContents.once('did-finish-load', () => {
+      const st = firstState()
+      if (st) void restoreSession(st)
+    })
+  }
+
   // Fires on system appearance changes (e.g. macOS auto Light↔Dark at sunset),
   // even when every window has been closed but the app is still running.
   nativeTheme.on('updated', () => {
@@ -924,6 +1091,14 @@ ipcMain.handle('dialog:addAny', async (e) => {
 ipcMain.handle('app:new-window', async () => {
   createWindow()
 })
+
+// ---- Open Recent ----
+ipcMain.handle('recents:get', async () => currentRecents())
+ipcMain.handle('recents:open', async (e, entry: RecentEntry) => {
+  const st = stateFromEvent(e) ?? (await ensureWindow())
+  await openRecent(st, entry)
+})
+ipcMain.handle('recents:clear', async () => clearRecents())
 
 // A fresh renderer (first load or a crash-recovery reload) pulls the workspace
 // its window already has — IPC pushes sent before the load are lost otherwise.

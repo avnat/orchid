@@ -9,10 +9,15 @@ interface FileItem {
   relPath: string
 }
 
-function flatten(nodes: MdNode[], out: FileItem[] = []): FileItem[] {
+// `prefix` is the workspace folder's own name, so the matchable/displayed path
+// reads exactly like the sidebar (e.g. "adocs/projects/deep/file.md"). Node
+// relPaths are folder-root-relative and omit that name, which otherwise made a
+// query that includes the top folder fail — at any depth.
+function flatten(nodes: MdNode[], prefix: string, out: FileItem[] = []): FileItem[] {
   for (const n of nodes) {
-    if (n.type === 'file') out.push({ name: n.name, path: n.path, relPath: n.relPath })
-    else if (n.children) flatten(n.children, out)
+    if (n.type === 'file')
+      out.push({ name: n.name, path: n.path, relPath: prefix ? `${prefix}/${n.relPath}` : n.relPath })
+    else if (n.children) flatten(n.children, prefix, out)
   }
   return out
 }
@@ -32,7 +37,7 @@ export default function CommandPalette({
   const inputRef = useRef<HTMLInputElement>(null)
   const listRef = useRef<HTMLUListElement>(null)
 
-  const files = useMemo(() => folders.flatMap((f) => flatten(f.tree)), [folders])
+  const files = useMemo(() => folders.flatMap((f) => flatten(f.tree, f.isFile ? '' : f.name)), [folders])
 
   const results = useMemo(() => {
     return files
