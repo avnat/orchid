@@ -13,6 +13,7 @@ import DeveloperPanel from './components/DeveloperPanel'
 import UpdateDialog, { type UpdateInfo } from './components/UpdateDialog'
 import PdfDialog, { type PdfOptions } from './components/PdfDialog'
 import FindBar from './components/FindBar'
+import Tooltip from './components/Tooltip'
 import { buildStandaloneHtml } from './markdown/exportDoc'
 import { isMarkdownFile, isPdfFile } from './markdown/langs'
 import { accentByKey } from './themes'
@@ -113,7 +114,8 @@ export default function App(): JSX.Element {
     const offs = [
       window.orchid.onWorkspaceChanged(({ folders, select }) => {
         s().setWorkspace(folders, select)
-        if (select) void s().selectFile(select)
+        // Opening a file (dialog / drag / reveal) always lands in its own tab.
+        if (select) void s().selectFile(select, { newTab: true })
       }),
       window.orchid.onFileChanged(({ path }) => s().onExternalChange(path)),
       window.orchid.onTreeChanged(({ path }) => {
@@ -299,7 +301,7 @@ export default function App(): JSX.Element {
     <div className="app">
       <div className={`titlebar ${activePath && editMode ? 'editing' : ''}`}>
         <div className="left">
-          <button className="tbtn" onClick={() => window.orchid.open()} title="Open a folder or file (⌘O)">
+          <button className="tbtn" onClick={() => window.orchid.open()} data-tip="Open a folder or file (⌘O)">
             Open
           </button>
         </div>
@@ -335,7 +337,7 @@ export default function App(): JSX.Element {
             className={`tbtn icon ${anyPanelShown ? '' : 'on'}`}
             disabled={!activePath}
             onClick={() => useStore.getState().toggleFullscreen()}
-            title={anyPanelShown ? 'Focus mode — hide panels (⌘.)' : 'Exit focus mode (⌘.)'}
+            data-tip={anyPanelShown ? 'Focus mode — hide panels (⌘.)' : 'Exit focus mode (⌘.)'}
             aria-label="Toggle focus mode"
           >
             {anyPanelShown ? '⤢' : '⤡'}
@@ -344,7 +346,7 @@ export default function App(): JSX.Element {
           <button
             className="tbtn icon"
             onClick={() => setSettingsOpen(true)}
-            title="Settings (⌘,)"
+            data-tip="Settings (⌘,)"
             aria-label="Settings"
           >
             ⚙
@@ -379,6 +381,7 @@ export default function App(): JSX.Element {
         </div>
       )}
 
+      <Tooltip />
       <FindBar open={findOpen} onClose={() => setFindOpen(false)} />
       <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} />
       <SearchPanel open={searchOpen} onClose={() => setSearchOpen(false)} />

@@ -2,6 +2,27 @@
 
 All notable changes to **Orchid**. Newest first. Built for macOS (Apple Silicon).
 
+## 2.2.0 — 2026-08-11
+
+Editing comfort, an Open Recent that remembers your work, and a tab model that does what you'd expect.
+
+**Added**
+- **Open Recent — folders and files.** A new **File → Open Recent** submenu and a **Recent** list on the landing screen (with folder/file icons and paths), so you can jump straight back to what you were reading. The list keeps your last 20 and quietly drops anything that's been deleted.
+- **Reopen your last workspace on launch.** Orchid comes back up with the folders and files you had open.
+- **Line numbers + a status bar, Sublime-style.** Edit mode now shows a line-number gutter, and a bar along the bottom reports **Line X, Column Y** (and how many characters are selected). While reading, the bar shows the file's total line count.
+- **Fast hover tooltips.** File and folder rows, the toolbar, and the titlebar buttons show their tooltip almost instantly — no more waiting on the system's slow one — and file rows reveal the full path.
+
+**Changed**
+- **Opening a file always opens its own tab.** Clicking a file in the sidebar, `⌘O`, drag-and-drop, `⌘P`, or "Open With…" from Finder each open the file in a fresh tab and never hijack the one you're on. Re-opening a file you already have just switches to it. (Browsing with the ↑/↓ keys still reuses a single tab, so it never floods you with tabs.)
+- **Focus mode fills the width.** Hiding the panels now lets the document use the whole pane with a comfortable gutter, instead of a narrow column marooned in white space on wide displays.
+- **Jump to File (`⌘P`) handles deep paths.** It now matches the full path exactly as the sidebar shows it — top folder included — so a query like `docs/projects/notes/handover.md` matches no matter how deep it is.
+- **The Open button clears the window controls** — it no longer crowds the traffic lights.
+- **Multi-select-to-delete is hidden when only loose files are open** — with no folder tree there's nothing to tick.
+
+**Fixed**
+- **Opening several files from the same folder now works.** Previously the second and third loose file opened from one folder would fail to appear in the sidebar (and could lose its tab). Each now keeps its own row and tab.
+- **The hover tooltip no longer gets clipped** off the left edge, and it's restyled to match the app (a soft surface card) instead of a hard black box.
+
 ## 2.1.1 — 2026-07-14
 
 **Changed**

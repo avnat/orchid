@@ -22,6 +22,12 @@ export interface ShortcutDef {
   defaultAccelerator: string
 }
 
+export interface RecentEntry {
+  path: string
+  kind: 'folder' | 'file'
+  name: string
+}
+
 function on<T>(channel: string, cb: (payload: T) => void): () => void {
   const listener = (_e: IpcRendererEvent, payload: T): void => cb(payload)
   ipcRenderer.on(channel, listener)
@@ -85,10 +91,14 @@ const api = {
   newWindow: (): Promise<void> => ipcRenderer.invoke('app:new-window'),
   closeWindow: (): void => ipcRenderer.send('win:close'),
   getWorkspace: (): Promise<{ folders: WorkspaceFolder[] }> => ipcRenderer.invoke('workspace:get'),
+  getRecents: (): Promise<RecentEntry[]> => ipcRenderer.invoke('recents:get'),
+  openRecent: (entry: RecentEntry): Promise<void> => ipcRenderer.invoke('recents:open', entry),
+  clearRecents: (): Promise<void> => ipcRenderer.invoke('recents:clear'),
 
   // events (return an unsubscribe fn)
   onWorkspaceChanged: (cb: (p: { folders: WorkspaceFolder[]; select?: string }) => void) =>
     on('workspace:changed', cb),
+  onRecentsChanged: (cb: (list: RecentEntry[]) => void) => on('recents:changed', cb),
   onFileChanged: (cb: (p: { path: string }) => void) => on('fs:changed', cb),
   onTreeChanged: (cb: (p: { path?: string }) => void) => on('fs:tree-changed', cb),
   onThemeChanged: (cb: (p: { shouldUseDarkColors: boolean }) => void) => on('theme:changed', cb),

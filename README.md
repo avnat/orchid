@@ -62,7 +62,8 @@ Press Return, then open Orchid normally. You only ever need this once.
 ## Features
 
 **Navigate**
-- **Tabs** — every open file gets a tab. Single-click *browses* in one reusable preview tab (so skimming never piles up tabs); **double-click** (or ⌥-click, or right-click → *Open in New Tab*) keeps a file in its own tab, and editing pins a preview automatically. `⌘W` closes a tab, `⌃Tab` cycles, `⌘1`–`⌘9` jump, drag to reorder, and right-click for **Close Others / to the Right / to the Left / All**.
+- **Tabs** — every file you open gets its own tab; opening never hijacks the tab you're on, and re-opening a file just switches to it. `⌘W` closes a tab, `⌃Tab` cycles, `⌘1`–`⌘9` jump, drag to reorder, and right-click for **Close Others / to the Right / to the Left / All**. (Browsing with `↑`/`↓` in the sidebar reuses one tab, so it never piles up.)
+- **Open Recent** — jump straight back to recent folders and files from **File → Open Recent** or the list on the landing screen, and Orchid reopens your last workspace when you relaunch.
 - **Multiple windows** — **File → New Window** (`⌥⌘N`) opens an independent window with its own folders and tabs. Two projects, side by side.
 - **Folder-native** — open a folder and the sidebar shows your Markdown (and code/text files), nested structure preserved, noise (`node_modules`, dotfiles) hidden.
 - **Multi-folder workspaces** — keep several folders open at once, each a collapsible section. Add, close, or remove folders any time. Opening a single file adds it alongside them.
@@ -82,7 +83,7 @@ Press Return, then open Orchid normally. You only ever need this once.
 **Create & edit**
 - **New files** (`⌘N`) and **folders** (`⌘⇧N`) — from the menu or the sidebar `+`; code files get syntax highlighting; extension-less files default to `.txt`.
 - **Manage files** — **rename**, **move** by dragging onto a folder, **copy path / relative path** (the menu shows exactly what you'll copy), and **delete to Trash** with **multi-select** — all from right-click.
-- **Light editing** — `⌘E` toggles a CodeMirror editor with a scroll-synced live preview (the cursor lands ready to type); `⌘S` saves. Full cut / copy / paste / undo (keyboard **and** right-click), and an Edit menu. Unsaved edits live safely in their tab — switching files never loses them, and closing offers to save.
+- **Light editing** — `⌘E` toggles a CodeMirror editor with a scroll-synced live preview (the cursor lands ready to type), a line-number gutter, and a status bar showing your line & column (it shows the file's line count while reading); `⌘S` saves. Full cut / copy / paste / undo (keyboard **and** right-click), and an Edit menu. Unsaved edits live safely in their tab — switching files never loses them, and closing offers to save.
 - **Export** — self-contained **HTML** or **PDF** with a customisable header, footer, and page numbers; always rendered light for clean printing and sharing.
 
 **Stay current**

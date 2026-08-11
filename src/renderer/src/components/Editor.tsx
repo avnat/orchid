@@ -16,23 +16,44 @@ function mix(a: string, b: string, r: number): string {
   return '#' + c.map((v) => v.toString(16).padStart(2, '0')).join('')
 }
 
+export interface CursorPos {
+  line: number
+  col: number
+  sel: number
+}
+
 export default function Editor({
   dark,
   language,
   readOnly = false,
   showLineNumbers = false,
-  onScrollFraction
+  onScrollFraction,
+  onCursor
 }: {
   dark: boolean
   language?: Extension | null
   readOnly?: boolean
   showLineNumbers?: boolean
   onScrollFraction?: (fraction: number) => void
+  onCursor?: (pos: CursorPos) => void
 }): JSX.Element {
   const content = useStore((s) => s.content)
   const setContent = useStore((s) => s.setContent)
   const accentKey = useStore((s) => s.accentKey)
   const viewRef = useRef<EditorView | null>(null)
+  // kept in a ref so the update-listener extension never has to be rebuilt
+  const onCursorRef = useRef(onCursor)
+  onCursorRef.current = onCursor
+
+  const reportCursor = (view: EditorView): void => {
+    const sel = view.state.selection.main
+    const line = view.state.doc.lineAt(sel.head)
+    onCursorRef.current?.({
+      line: line.number,
+      col: sel.head - line.from + 1,
+      sel: Math.abs(sel.to - sel.from)
+    })
+  }
 
   // Undo/Redo are routed from the Edit menu so they drive CodeMirror's own
   // history (Electron's native execCommand undo doesn't).
@@ -82,9 +103,17 @@ export default function Editor({
   }, [dark, accentKey])
 
   const extensions = useMemo(() => {
-    const exts: Extension[] = [language ?? markdown(), EditorView.lineWrapping]
+    const exts: Extension[] = [
+      language ?? markdown(),
+      EditorView.lineWrapping,
+      // Feed the status bar the live line/column as the caret or selection moves.
+      EditorView.updateListener.of((u) => {
+        if (u.selectionSet || u.docChanged || u.focusChanged) reportCursor(u.view)
+      })
+    ]
     if (readOnly) exts.push(EditorState.readOnly.of(true), EditorView.editable.of(false))
     return exts
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [language, readOnly])
 
   return (
@@ -107,6 +136,7 @@ export default function Editor({
           view.dispatch({ selection: { anchor: 0, head: 0 } })
           view.focus()
         }
+        reportCursor(view) // seed the status bar right away (Line 1, Column 1)
         view.scrollDOM.addEventListener('scroll', () => {
           const el = view.scrollDOM
           const frac = el.scrollTop / Math.max(1, el.scrollHeight - el.clientHeight)

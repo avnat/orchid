@@ -20,6 +20,12 @@ export interface ShortcutDef {
   defaultAccelerator: string
 }
 
+export interface RecentEntry {
+  path: string
+  kind: 'folder' | 'file'
+  name: string
+}
+
 export interface OrchidApi {
   open: () => Promise<void>
   addFolder: () => Promise<void>
@@ -64,7 +70,11 @@ export interface OrchidApi {
   newWindow: () => Promise<void>
   closeWindow: () => void
   getWorkspace: () => Promise<{ folders: WorkspaceFolder[] }>
+  getRecents: () => Promise<RecentEntry[]>
+  openRecent: (entry: RecentEntry) => Promise<void>
+  clearRecents: () => Promise<void>
   onWorkspaceChanged: (cb: (p: { folders: WorkspaceFolder[]; select?: string }) => void) => () => void
+  onRecentsChanged: (cb: (list: RecentEntry[]) => void) => () => void
   onFileChanged: (cb: (p: { path: string }) => void) => () => void
   onTreeChanged: (cb: (p: { path?: string }) => void) => () => void
   onThemeChanged: (cb: (p: { shouldUseDarkColors: boolean }) => void) => () => void

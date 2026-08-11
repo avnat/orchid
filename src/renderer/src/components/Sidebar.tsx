@@ -365,7 +365,7 @@ function TreeNodes({
                     dropTarget === n.path ? 'drop-target' : ''
                   }`}
                   style={pad}
-                  title={n.path}
+                  data-tip={n.path}
                   onClick={() => (selectMode ? toggleDir() : toggle(n.path))}
                   onContextMenu={(e) => {
                     e.preventDefault()
@@ -443,7 +443,7 @@ function TreeNodes({
             <div
               className={`node ${activePath === n.path ? 'active' : ''} ${fileSel ? 'selected' : ''}`}
               style={pad}
-              title={n.path}
+              data-tip={n.path}
               data-path={n.path}
               draggable={!selectMode}
               onDragStart={(e) => {
@@ -517,7 +517,7 @@ function PinnedSection({ onNavigate }: { onNavigate: (path: string) => void }): 
             <li key={path}>
               <div
                 className={`node ${activePath === path ? 'active' : ''}`}
-                title={path}
+                data-tip={path}
                 onClick={() => onNavigate(path)}
                 onContextMenu={(e) => {
                   e.preventDefault()
@@ -588,8 +588,8 @@ function FolderSection({
         ) : (
           <div
             className={`node single ${activePath === f.path ? 'active' : ''}`}
-            title={f.path}
-            onClick={() => selectFile(f.path)}
+            data-tip={f.path}
+            onClick={() => void selectFile(f.path, { newTab: true })}
             onDoubleClick={() => void selectFile(f.path, { newTab: true })}
             onContextMenu={(e) => {
               e.preventDefault()
@@ -603,7 +603,7 @@ function FolderSection({
               title="Close"
               onClick={(e) => {
                 e.stopPropagation()
-                window.orchid.closeFolder(folder.root)
+                window.orchid.closeFolder(f.path)
               }}
             >
               ✕
@@ -638,7 +638,7 @@ function FolderSection({
         <span className="twist" onClick={() => toggle(folder.root)}>
           <Chevron />
         </span>
-        <span className="folder-name" onClick={() => toggle(folder.root)} title={folder.root}>
+        <span className="folder-name" onClick={() => toggle(folder.root)} data-tip={folder.root}>
           {folder.name}
         </span>
         <span className="folder-actions">
@@ -717,6 +717,13 @@ export default function Sidebar(): JSX.Element {
     [folders, filter, sortMode, collapsed]
   )
 
+  // Multi-select-to-delete only makes sense inside a folder tree — with just
+  // loose single files open there's nothing to tick, so the mode is hidden.
+  const hasRealFolder = folders.some((f) => !f.isFile)
+  useEffect(() => {
+    if (!hasRealFolder && selectMode) setSelectMode(false)
+  }, [hasRealFolder, selectMode, setSelectMode])
+
   // Collapse all / expand all (a single toggle that flips based on current state).
   const allDirs = useMemo(() => allDirPaths(folders), [folders])
   const allCollapsed = allDirs.length > 0 && allDirs.every((d) => collapsed.has(d))
@@ -770,8 +777,9 @@ export default function Sidebar(): JSX.Element {
       anchorRef.current = path
       setCursor(path)
     } else {
-      // ⌥-click opens the file in a new tab; a plain click reuses the current one
-      void selectFile(path, { newTab: e.altKey })
+      // Opening a file always gets its own tab — a click never hijacks or
+      // recycles an already-open tab (arrow-key browsing is the one exception).
+      void selectFile(path, { newTab: true })
       anchorRef.current = path
       setCursor(path)
     }
@@ -845,7 +853,7 @@ export default function Sidebar(): JSX.Element {
 
   // From the pinned list: open the file and expand its ancestor folders so it's visible.
   const navigateTo = (path: string): void => {
-    void selectFile(path)
+    void selectFile(path, { newTab: true })
     const dirs = ancestorDirs(path, folders)
     if (dirs.length) {
       setCollapsed((prev) => {
@@ -884,37 +892,39 @@ export default function Sidebar(): JSX.Element {
         <div className="side-trow">
           <button
             className="side-refresh"
-            title="New file or folder"
+            data-tip="New file or folder"
             aria-label="New"
             disabled={folders.length === 0}
             onClick={() => folders[0] && onNew(folders[0].root)}
           >
             {NewFileIcon}
           </button>
-          <button
-            className={`side-refresh ${selectMode ? 'on' : ''}`}
-            title="Select multiple files to delete"
-            aria-label="Select"
-            onClick={() => setSelectMode(!selectMode)}
-          >
-            {SelectIcon}
-          </button>
+          {hasRealFolder && (
+            <button
+              className={`side-refresh ${selectMode ? 'on' : ''}`}
+              data-tip="Select multiple files to delete"
+              aria-label="Select"
+              onClick={() => setSelectMode(!selectMode)}
+            >
+              {SelectIcon}
+            </button>
+          )}
           <button
             className="side-refresh"
-            title={allCollapsed ? 'Expand all folders' : 'Collapse all folders'}
+            data-tip={allCollapsed ? 'Expand all folders' : 'Collapse all folders'}
             aria-label={allCollapsed ? 'Expand all folders' : 'Collapse all folders'}
             disabled={allDirs.length === 0}
             onClick={toggleAll}
           >
             {allCollapsed ? ExpandAllIcon : CollapseAllIcon}
           </button>
-          <button className="side-refresh" title="Refresh (⌘R)" aria-label="Refresh" onClick={() => window.orchid.refresh()}>
+          <button className="side-refresh" data-tip="Refresh (⌘R)" aria-label="Refresh" onClick={() => window.orchid.refresh()}>
             {RefreshIcon}
           </button>
         </div>
       </div>
 
-      {selectMode && (
+      {selectMode && hasRealFolder && (
         <div className="select-bar">
           <span>{selected.length ? `${selected.length} selected` : 'Tick files & folders'}</span>
           <span className="select-actions">
@@ -943,7 +953,7 @@ export default function Sidebar(): JSX.Element {
         {!selectMode && <PinnedSection onNavigate={navigateTo} />}
         {folders.map((f) => (
           <FolderSection
-            key={f.root + (f.isFile ? ':file' : '')}
+            key={f.isFile && f.tree[0] ? f.tree[0].path : f.root}
             folder={f}
             filter={filter}
             sortMode={sortMode}

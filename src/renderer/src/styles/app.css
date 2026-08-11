@@ -12,7 +12,7 @@
   grid-template-columns: 1fr auto 1fr;
   align-items: center;
   height: 44px;
-  padding: 0 14px 0 84px; /* leave room for traffic lights */
+  padding: 0 14px 0 100px; /* clear the traffic lights with a real gap before "Open" */
   background: var(--bg);
   border-bottom: 1px solid var(--line);
   user-select: none;
@@ -325,6 +325,14 @@
 }
 .body.focus .sidebar {
   display: none;
+}
+/* Focus mode fills the width: drop the centered reading-column cap so the
+   document uses the whole pane, with a ~1in gutter each side instead of a
+   narrow column stranded in white space. */
+.body.focus .preview-wrap .reading {
+  max-width: none;
+  padding-left: 96px;
+  padding-right: 96px;
 }
 
 /* ---------- Sidebar ---------- */
@@ -2207,6 +2215,89 @@
   font-size: 12.5px;
   color: var(--muted);
 }
+
+/* Recent files & folders on the landing screen (PyCharm-style). */
+.empty-recent {
+  width: min(440px, 80vw);
+  margin: 30px 0 0;
+  text-align: left;
+}
+.empty-recent-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+  padding: 0 6px 6px;
+  border-bottom: 1px solid var(--line);
+}
+.recent-clear {
+  -webkit-app-region: no-drag;
+  border: 0;
+  background: none;
+  cursor: pointer;
+  font: inherit;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+  opacity: 0.7;
+}
+.recent-clear:hover {
+  color: var(--accent);
+  opacity: 1;
+}
+.empty-recent ul {
+  list-style: none;
+  margin: 6px 0 0;
+  padding: 0;
+}
+.recent-item {
+  -webkit-app-region: no-drag;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 8px;
+  border: 0;
+  border-radius: 8px;
+  background: none;
+  cursor: pointer;
+  font: inherit;
+  color: var(--text);
+  text-align: left;
+}
+.recent-item:hover {
+  background: var(--surface-2);
+}
+.recent-ic {
+  flex: none;
+  display: inline-flex;
+  color: var(--muted);
+}
+.recent-ic.folder {
+  color: var(--accent);
+}
+.recent-name {
+  flex: none;
+  max-width: 42%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13.5px;
+}
+.recent-path {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  /* keep the meaningful tail of the path visible when it's too long */
+  direction: rtl;
+  text-align: left;
+  font-size: 11.5px;
+  color: var(--muted);
+}
 .empty .linkbtn {
   -webkit-app-region: no-drag;
   background: none;
@@ -2273,6 +2364,51 @@
   border: 1px solid var(--line);
   border-radius: 5px;
   padding: 1px 6px;
+}
+
+/* ---------- Editor status bar (Sublime-style Line / Column) ---------- */
+.editor-statusbar {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  height: 26px;
+  padding: 0 14px;
+  border-top: 1px solid var(--line);
+  background: var(--bg);
+  color: var(--muted);
+  font-size: 11.5px;
+  font-variant-numeric: tabular-nums;
+  user-select: none;
+}
+.editor-statusbar .stat-sel {
+  color: var(--accent);
+}
+
+/* ---------- Fast hover tooltip ---------- */
+.app-tooltip {
+  position: fixed;
+  z-index: 60;
+  max-width: min(460px, 80vw);
+  padding: 6px 10px;
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--line);
+  font-size: 11.5px;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+  box-shadow: var(--shadow);
+  pointer-events: none;
+  animation: tip-in 90ms ease-out;
+}
+@keyframes tip-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
