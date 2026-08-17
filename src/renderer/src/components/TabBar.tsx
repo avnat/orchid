@@ -86,7 +86,7 @@ export default function TabBar(): JSX.Element | null {
             role="tab"
             aria-selected={p === activePath}
             className={`tab ${p === activePath ? 'active' : ''} ${isDirty(p) ? 'dirty' : ''}`}
-            title={p}
+            data-tip={p}
             draggable
             onDragStart={() => {
               dragFrom.current = i
