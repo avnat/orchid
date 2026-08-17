@@ -2384,6 +2384,18 @@
 .editor-statusbar .stat-sel {
   color: var(--accent);
 }
+/* File location, pushed to the right; long paths keep their tail (filename) and
+   ellipsize at the start. */
+.editor-statusbar .stat-loc {
+  margin-left: auto;
+  max-width: 62%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  direction: rtl;
+  text-align: left;
+  color: var(--muted);
+}
 
 /* ---------- Fast hover tooltip ---------- */
 .app-tooltip {

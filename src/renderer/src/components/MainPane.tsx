@@ -1,6 +1,7 @@
-import { useEffect, useMemo, useRef, useState, lazy, Suspense } from 'react'
+import { useEffect, useMemo, useRef, useState, lazy, Suspense, type ReactNode } from 'react'
 import { useStore } from '../store/useStore'
 import type { CursorPos } from './Editor'
+import type { WorkspaceFolder } from '../types'
 import MarkdownView from '../markdown/MarkdownView'
 import ConflictBanner from './ConflictBanner'
 import Toc from './Toc'
@@ -11,6 +12,15 @@ import { isMarkdownFile, isPdfFile, langForFile } from '../markdown/langs'
 const Editor = lazy(() => import('./Editor'))
 // pdf.js is large too — only pulled in when a PDF is opened.
 const PdfView = lazy(() => import('./PdfView'))
+
+/** Workspace-relative path of the open file, top folder included (e.g.
+ *  "docs/projects/notes/handover.md"). Loose single files show just their name. */
+function locationLabel(activePath: string, folders: WorkspaceFolder[]): string {
+  const base = activePath.slice(activePath.lastIndexOf('/') + 1)
+  const f = folders.find((w) => activePath === w.root || activePath.startsWith(w.root + '/'))
+  if (!f || f.isFile) return base
+  return `${f.name}/${activePath.slice(f.root.length + 1)}`
+}
 
 export default function MainPane(): JSX.Element {
   const activePath = useStore((s) => s.activePath)
@@ -32,24 +42,41 @@ export default function MainPane(): JSX.Element {
 
   // Sublime-style caret position for the status bar (set by the editor).
   const [caret, setCaret] = useState<CursorPos | null>(null)
-  const statusBar = caret && (
-    <div className="editor-statusbar">
+  const folders = useStore((s) => s.folders)
+
+  // File location, shown right-aligned in the status bar in every mode.
+  const location = useMemo(
+    () => (activePath ? locationLabel(activePath, folders) : ''),
+    [activePath, folders]
+  )
+  // Total line count — the read-mode bar (a rendered file has no caret).
+  const lineCount = useMemo(() => (content ? content.split(/\r?\n/).length : 0), [content])
+
+  // One bar: a left slot (caret or line count) plus the file location on the right.
+  const renderStatus = (left: ReactNode): JSX.Element | null =>
+    left || location ? (
+      <div className="editor-statusbar">
+        {left}
+        {location && (
+          <span className="stat-loc" data-tip={activePath ?? undefined}>
+            {location}
+          </span>
+        )}
+      </div>
+    ) : null
+
+  const caretSlot = caret ? (
+    <>
       <span>
         Line {caret.line}, Column {caret.col}
       </span>
       {caret.sel > 0 && <span className="stat-sel">{caret.sel} selected</span>}
-    </div>
-  )
-
-  // Reading a rendered file has no caret, so the bottom bar shows the file's
-  // total line count instead.
-  const lineCount = useMemo(() => (content ? content.split(/\r?\n/).length : 0), [content])
-  const readStatusBar = (
-    <div className="editor-statusbar">
-      <span>
-        {lineCount} {lineCount === 1 ? 'line' : 'lines'}
-      </span>
-    </div>
+    </>
+  ) : null
+  const lineSlot = (
+    <span>
+      {lineCount} {lineCount === 1 ? 'line' : 'lines'}
+    </span>
   )
 
   // Drag the editor↔preview divider (clamped to 25–75% by the store).
@@ -103,6 +130,7 @@ export default function MainPane(): JSX.Element {
         <Suspense fallback={<div className="pdf-loading">Loading PDF…</div>}>
           <PdfView path={activePath} />
         </Suspense>
+        {renderStatus(null)}
       </div>
     )
   }
@@ -144,7 +172,7 @@ export default function MainPane(): JSX.Element {
             />
           </Suspense>
         </div>
-        {statusBar}
+        {renderStatus(caretSlot)}
       </div>
     )
   }
@@ -194,7 +222,7 @@ export default function MainPane(): JSX.Element {
           )}
         </div>
       )}
-      {editMode ? statusBar : readStatusBar}
+      {editMode ? renderStatus(caretSlot) : renderStatus(lineSlot)}
     </div>
   )
 }

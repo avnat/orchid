@@ -83,7 +83,7 @@ Press Return, then open Orchid normally. You only ever need this once.
 **Create & edit**
 - **New files** (`⌘N`) and **folders** (`⌘⇧N`) — from the menu or the sidebar `+`; code files get syntax highlighting; extension-less files default to `.txt`.
 - **Manage files** — **rename**, **move** by dragging onto a folder, **copy path / relative path** (the menu shows exactly what you'll copy), and **delete to Trash** with **multi-select** — all from right-click.
-- **Light editing** — `⌘E` toggles a CodeMirror editor with a scroll-synced live preview (the cursor lands ready to type), a line-number gutter, and a status bar showing your line & column (it shows the file's line count while reading); `⌘S` saves. Full cut / copy / paste / undo (keyboard **and** right-click), and an Edit menu. Unsaved edits live safely in their tab — switching files never loses them, and closing offers to save.
+- **Light editing** — `⌘E` toggles a CodeMirror editor with a scroll-synced live preview (the cursor lands ready to type), a line-number gutter, and a status bar showing your line & column plus the file's location (and its line count while reading); `⌘S` saves. Full cut / copy / paste / undo (keyboard **and** right-click), and an Edit menu. Unsaved edits live safely in their tab — switching files never loses them, and closing offers to save.
 - **Export** — self-contained **HTML** or **PDF** with a customisable header, footer, and page numbers; always rendered light for clean printing and sharing.
 
 **Stay current**

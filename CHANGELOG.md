@@ -2,6 +2,14 @@
 
 All notable changes to **Orchid**. Newest first. Built for macOS (Apple Silicon).
 
+## 2.2.1 — 2026-08-17
+
+**Added**
+- **The file's location in the status bar.** The bottom bar now shows the open file's path (relative to its folder) on the right, in every mode — alongside the line & column while editing, and the line count while reading.
+
+**Fixed**
+- **Hovering a tab shows its full path** right away, using the quick tooltip instead of the slow system one.
+
 ## 2.2.0 — 2026-08-11
 
 Editing comfort, an Open Recent that remembers your work, and a tab model that does what you'd expect.
