@@ -6,7 +6,7 @@ directories:
 files:
   - out/**/*
   - resources/**/*
-# Ship only the English locale — Chromium bundles ~50 .pak locale files we don't use.
+# Ship only the English locale â€” Chromium bundles ~50 .pak locale files we don't use.
 electronLanguages:
   - en
 mac:
@@ -23,3 +23,14 @@ mac:
 # Friends still get a one-time "Open Anyway" (no Terminal). Full notarization
 # would need an Apple Developer account.
 afterPack: build/adhoc-sign.cjs
+win:
+  target:
+    - target: portable
+      arch:
+        - x64
+        - ia32
+    - target: nsis
+      arch:
+        - x64
+        - ia32
+  artifactName: ${productName}-${version}-${arch}.${ext}

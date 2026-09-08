@@ -1,6 +1,11 @@
 import { promises as fs } from 'fs'
 import { join, relative } from 'path'
 
+/** IPC / renderer paths always use `/`, even on Windows. */
+export function slash(p: string): string {
+  return p.replace(/\\/g, '/')
+}
+
 export const MD_EXTENSIONS = ['.md', '.markdown', '.mdx']
 
 // Files Orchid surfaces: markdown first, plus common text/code files so created
@@ -97,8 +102,8 @@ export async function scanFolder(root: string, dir: string = root): Promise<MdNo
       const children = await scanFolder(root, fullPath)
       nodes.push({
         name,
-        path: fullPath,
-        relPath: relative(root, fullPath),
+        path: slash(fullPath),
+        relPath: slash(relative(root, fullPath)),
         type: 'dir',
         children
       })
@@ -111,8 +116,8 @@ export async function scanFolder(root: string, dir: string = root): Promise<MdNo
       }
       nodes.push({
         name,
-        path: fullPath,
-        relPath: relative(root, fullPath),
+        path: slash(fullPath),
+        relPath: slash(relative(root, fullPath)),
         type: 'file',
         mtimeMs
       })

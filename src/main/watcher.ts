@@ -1,6 +1,6 @@
 import chokidar, { FSWatcher } from 'chokidar'
 import { BrowserWindow } from 'electron'
-import { TEXT_EXTENSIONS } from './fs-scan'
+import { slash, TEXT_EXTENSIONS } from './fs-scan'
 
 // One watcher per window — each window has its own workspace.
 const watchers = new Map<number, FSWatcher>()
@@ -32,16 +32,16 @@ export function watchPaths(paths: string[], win: BrowserWindow | null): void {
 
   watcher
     .on('change', (path) => {
-      if (isMd(path)) send('fs:changed', { path })
+      if (isMd(path)) send('fs:changed', { path: slash(path) })
     })
     .on('add', (path) => {
-      if (isMd(path)) send('fs:tree-changed', { path })
+      if (isMd(path)) send('fs:tree-changed', { path: slash(path) })
     })
     .on('unlink', (path) => {
-      if (isMd(path)) send('fs:tree-changed', { path })
+      if (isMd(path)) send('fs:tree-changed', { path: slash(path) })
     })
-    .on('addDir', (path) => send('fs:tree-changed', { path }))
-    .on('unlinkDir', (path) => send('fs:tree-changed', { path }))
+    .on('addDir', (path) => send('fs:tree-changed', { path: slash(path) }))
+    .on('unlinkDir', (path) => send('fs:tree-changed', { path: slash(path) }))
 }
 
 /** Stop the watcher for one window, or all of them when no window is given. */

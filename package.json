@@ -1,7 +1,7 @@
 {
   "name": "orchid",
   "version": "2.2.1",
-  "description": "A subtle, native macOS reading surface for your markdown.",
+  "description": "A subtle, native reading surface for your markdown.",
   "main": "./out/main/index.js",
   "author": "avnee",
   "license": "MIT",
@@ -13,7 +13,9 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:cov": "vitest run --coverage",
-    "dist": "electron-vite build && electron-builder --mac"
+    "dist": "electron-vite build && electron-builder --mac",
+    "dist:win": "electron-vite build && electron-builder --win",
+    "dist:linux": "electron-vite build && electron-builder --linux"
   },
   "dependencies": {
     "chokidar": "^3.6.0"
