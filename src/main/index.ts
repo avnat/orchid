@@ -5,13 +5,23 @@ import { homedir } from 'os'
 import { reportCrash } from './crash-report'
 import { summarizeCrashIps } from './crash-summary'
 import { pathToFileURL } from 'url'
-import { scanFolder, TEXT_EXTENSIONS, type MdNode } from './fs-scan'
+import { scanFolder, slash, TEXT_EXTENSIONS, type MdNode } from './fs-scan'
 import { watchPaths, stopWatching } from './watcher'
 import { cmpVersions } from './version'
 import { SHORTCUT_DEFS, mergeShortcuts, sanitizeOverrides, isValidAccelerator } from './shortcuts'
 import { addRecent, pruneRecents, type RecentEntry } from './recents'
 
 const TEXT_RE = new RegExp('\\.(' + TEXT_EXTENSIONS.map((e) => e.slice(1)).join('|') + ')$', 'i')
+const isMac = process.platform === 'darwin'
+
+function titleBarOverlay(): Electron.TitleBarOverlay {
+  const dark = nativeTheme.shouldUseDarkColors
+  return {
+    color: dark ? '#141318' : '#FBFAFD',
+    symbolColor: dark ? '#E8E4EE' : '#3A3545',
+    height: 44
+  }
+}
 
 interface WSFolder {
   root: string
@@ -258,6 +268,7 @@ async function restoreSession(st: WinState): Promise<void> {
 }
 
 async function openFolder(st: WinState, folderPath: string, add = false): Promise<void> {
+  folderPath = slash(folderPath)
   const tree = await scanFolder(folderPath)
   const entry: WSFolder = { root: folderPath, name: basename(folderPath) || folderPath, tree }
   if (add) {
@@ -277,6 +288,7 @@ async function openFolder(st: WinState, folderPath: string, add = false): Promis
  * open folders and their tabs stay put.
  */
 async function openFile(st: WinState, filePath: string): Promise<void> {
+  filePath = slash(filePath)
   const target = resolve(filePath)
   // Only skip adding a loose entry when the file already lives inside an open
   // FOLDER (it shows in that tree). A single-file entry's root is its parent
@@ -296,7 +308,7 @@ async function openFile(st: WinState, filePath: string): Promise<void> {
     }
     const node: MdNode = {
       name: basename(filePath),
-      path: filePath,
+      path: slash(filePath),
       relPath: basename(filePath),
       type: 'file',
       mtimeMs
@@ -364,21 +376,40 @@ async function openFolderDialog(st: WinState, add: boolean): Promise<void> {
 }
 
 /**
- * One dialog that accepts a folder OR a single file (macOS allows both).
- * With `add`, a chosen folder joins the workspace instead of replacing it
- * (files are always additive).
+ * Open a folder or a single file. macOS can pick either in one dialog; Windows
+ * and Linux cannot, so we ask which first.
  */
 async function openDialog(st: WinState, add = false): Promise<void> {
   if (!windowAlive(st)) return
+  const filters = [
+    { name: 'All files', extensions: ['*'] },
+    { name: 'Markdown & text', extensions: TEXT_EXTENSIONS.map((e) => e.slice(1)) }
+  ]
+  if (!isMac) {
+    const { response } = await dialog.showMessageBox(st.win, {
+      type: 'question',
+      buttons: ['Folder', 'File', 'Cancel'],
+      defaultId: 0,
+      cancelId: 2,
+      message: add ? 'Add to workspace' : 'Open',
+      detail: 'Choose a folder of Markdown, or a single file.'
+    })
+    if (response === 2) return
+    if (response === 0) {
+      await openFolderDialog(st, add)
+      return
+    }
+    const filePick = await dialog.showOpenDialog(st.win, { properties: ['openFile'], filters })
+    if (filePick.canceled || filePick.filePaths.length === 0) return
+    await openFile(st, filePick.filePaths[0])
+    return
+  }
   const result = await dialog.showOpenDialog(st.win, {
     properties: ['openFile', 'openDirectory'],
     // "All files" is the default so nothing is wrongly greyed out — macOS can
     // resolve some .md files to a non-markdown UTI, which an extension filter
     // would block. "Markdown & text" stays available as a narrowing option.
-    filters: [
-      { name: 'All files', extensions: ['*'] },
-      { name: 'Markdown & text', extensions: TEXT_EXTENSIONS.map((e) => e.slice(1)) }
-    ],
+    filters,
     message: add ? 'Add a folder or a file to the workspace' : 'Open a folder or a file'
   })
   if (result.canceled || result.filePaths.length === 0) return
@@ -448,9 +479,9 @@ function createWindow(): BrowserWindow {
     minHeight: 420,
     ...cascade,
     show: false,
-    titleBarStyle: 'hiddenInset',
+    titleBarStyle: isMac ? 'hiddenInset' : 'hidden',
     backgroundColor: nativeTheme.shouldUseDarkColors ? '#141318' : '#FBFAFD',
-    vibrancy: 'sidebar',
+    ...(isMac ? { vibrancy: 'sidebar' as const } : { titleBarOverlay: titleBarOverlay() }),
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
       sandbox: true,
@@ -607,12 +638,14 @@ function fetchLatestRelease(): Promise<ReleaseInfo | null> {
         try {
           const j = JSON.parse(data)
           if (!j.tag_name) return resolve(null)
-          const dmg = (j.assets || []).find((a: { name: string }) => a.name.endsWith('.dmg'))
+          const assets: { name: string; browser_download_url: string }[] = j.assets || []
+          const want = process.platform === 'win32' ? '.exe' : '.dmg'
+          const file = assets.find((a) => a.name.endsWith(want) && !a.name.endsWith('.blockmap'))
           resolve({
             version: j.tag_name,
             notes: typeof j.body === 'string' ? j.body : '',
             url: j.html_url,
-            download: dmg?.browser_download_url || j.html_url
+            download: file?.browser_download_url || j.html_url
           })
         } catch {
           resolve(null)
@@ -706,23 +739,47 @@ function recentMenuItems(): Electron.MenuItemConstructorOptions[] {
   return items
 }
 
+function showAbout(): void {
+  const st = focusedState()
+  const opts: Electron.MessageBoxOptions = {
+    type: 'info',
+    title: 'About Orchid',
+    message: 'Orchid',
+    detail: `Version ${app.getVersion()}\nA calm reader for the Markdown your tools generate.\n© 2026 Avnee · MIT`
+  }
+  if (windowAlive(st)) void dialog.showMessageBox(st.win, opts)
+  else void dialog.showMessageBox(opts)
+}
+
 function buildMenu(): void {
-  const template: Electron.MenuItemConstructorOptions[] = [
-    {
-      label: app.name,
-      submenu: [
-        { role: 'about' },
-        { label: 'Check for Updates…', click: () => void checkForUpdates(true) },
+  const fileExtra: Electron.MenuItemConstructorOptions[] = isMac
+    ? []
+    : [
         { type: 'separator' },
         { label: 'Settings…', accelerator: 'CmdOrCtrl+,', click: () => sendToFocused('cmd:settings') },
         { type: 'separator' },
-        { role: 'hide' },
-        { role: 'hideOthers' },
-        { role: 'unhide' },
-        { type: 'separator' },
         { role: 'quit' }
       ]
-    },
+  const template: Electron.MenuItemConstructorOptions[] = [
+    ...(isMac
+      ? [
+          {
+            label: app.name,
+            submenu: [
+              { role: 'about' },
+              { label: 'Check for Updates…', click: () => void checkForUpdates(true) },
+              { type: 'separator' },
+              { label: 'Settings…', accelerator: 'CmdOrCtrl+,', click: () => sendToFocused('cmd:settings') },
+              { type: 'separator' },
+              { role: 'hide' },
+              { role: 'hideOthers' },
+              { role: 'unhide' },
+              { type: 'separator' },
+              { role: 'quit' }
+            ]
+          } as Electron.MenuItemConstructorOptions
+        ]
+      : []),
     {
       label: 'File',
       submenu: [
@@ -749,7 +806,8 @@ function buildMenu(): void {
         { label: 'Find in Files…', accelerator: accel('searchAll'), click: () => sendToFocused('cmd:search') },
         { type: 'separator' },
         { label: 'Export as HTML…', click: () => sendToFocused('cmd:export-html') },
-        { label: 'Export as PDF…', click: () => sendToFocused('cmd:export-pdf') }
+        { label: 'Export as PDF…', click: () => sendToFocused('cmd:export-pdf') },
+        ...fileExtra
       ]
     },
     {
@@ -810,11 +868,18 @@ function buildMenu(): void {
             shell.openExternal(
               'https://twitter.com/intent/tweet?text=' +
                 encodeURIComponent(
-                  "I've been reading my Markdown in Orchid — a clean, native macOS reader by @AvneeNathani 🌸 https://github.com/avnat/orchid"
+                  "I've been reading my Markdown in Orchid — a clean, native reader by @AvneeNathani 🌸 https://github.com/avnat/orchid"
                 )
             )
         },
-        { label: 'Follow @AvneeNathani on X', click: () => shell.openExternal('https://twitter.com/AvneeNathani') }
+        { label: 'Follow @AvneeNathani on X', click: () => shell.openExternal('https://twitter.com/AvneeNathani') },
+        ...(!isMac
+          ? ([
+              { type: 'separator' },
+              { label: 'Check for Updates…', click: () => void checkForUpdates(true) },
+              { label: 'About Orchid', click: () => showAbout() }
+            ] as Electron.MenuItemConstructorOptions[])
+          : [])
       ]
     }
   ]
@@ -860,6 +925,7 @@ function crashSeenFile(): string {
   return join(app.getPath('userData'), 'crash-seen.json')
 }
 function reportDiagnosticCrashes(): void {
+  if (!isMac) return
   try {
     const dir = process.env['ORCHID_CRASH_DIR'] || join(homedir(), 'Library', 'Logs', 'DiagnosticReports')
     let seen = 0
@@ -912,7 +978,7 @@ app.whenReady().then(async () => {
     applicationVersion: app.getVersion(),
     version: '', // hide the parenthetical build number — it would repeat the version
     copyright: '© 2026 Avnee · MIT',
-    credits: 'A calm, native macOS reader for the Markdown your tools generate.'
+    credits: 'A calm, native reader for the Markdown your tools generate.'
   })
   protocol.handle('orchid-asset', (request) => {
     const url = new URL(request.url)

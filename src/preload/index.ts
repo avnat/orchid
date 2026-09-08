@@ -36,6 +36,7 @@ function on<T>(channel: string, cb: (payload: T) => void): () => void {
 
 const api = {
   // actions
+   platform: process.platform,
   open: (): Promise<void> => ipcRenderer.invoke('dialog:open'),
   addFolder: (): Promise<void> => ipcRenderer.invoke('dialog:addFolder'),
   addAny: (): Promise<void> => ipcRenderer.invoke('dialog:addAny'),

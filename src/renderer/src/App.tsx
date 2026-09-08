@@ -299,7 +299,11 @@ export default function App(): JSX.Element {
 
   return (
     <div className="app">
-      <div className={`titlebar ${activePath && editMode ? 'editing' : ''}`}>
+      <div
+  className={`titlebar ${activePath && editMode ? 'editing' : ''} ${
+    window.orchid.platform === 'win32' ? 'windows-titlebar' : ''
+  }`}
+>
         <div className="left">
           <button className="tbtn" onClick={() => window.orchid.open()} data-tip="Open a folder or file (⌘O)">
             Open
