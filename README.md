@@ -4,7 +4,7 @@
 
 # Orchid
 
-**A calm, native macOS reader for the Markdown your tools generate.**
+**A calm, native Markdown reader for macOS and Windows.**
 
 Point it at a folder (or several) and Orchid surfaces every Markdown file inside —
 beautifully rendered, live-updating, and built for *reading*. Now also creates, edits,
@@ -12,7 +12,8 @@ and syntax-highlights code files.
 
 [![Download — latest release](https://img.shields.io/github/v/release/avnat/orchid?label=download&color=7c4dd6&sort=semver)](https://github.com/avnat/orchid/releases/latest)
 [![License: MIT](https://img.shields.io/badge/License-MIT-7c4dd6.svg)](LICENSE)
-![Platform: macOS](https://img.shields.io/badge/platform-macOS%20(Apple%20Silicon)-555.svg)
+![Platform: macOS](https://img.shields.io/badge/platform-macOS-555.svg)
+![Platform: Windows](https://img.shields.io/badge/platform-Windows-555.svg)
 ![Built with Electron + React](https://img.shields.io/badge/built%20with-Electron%20%2B%20React-7c4dd6.svg)
 
 </div>
@@ -21,7 +22,9 @@ and syntax-highlights code files.
 
 ## ⬇️ Download & install
 
-> **Requires macOS on Apple Silicon** (M1 / M2 / M3 / M4).
+### macOS
+
+Orchid supports macOS on Apple Silicon (M1 / M2 / M3 / M4).
 
 **1. Download** the latest **`Orchid-*.dmg`** from the [**Releases page**](https://github.com/avnat/orchid/releases/latest).
 
@@ -38,6 +41,20 @@ Orchid is a free, open-source app that isn't paid-signed by Apple, so macOS doub
 5. Confirm with **Open Anyway** (Touch ID / password if asked).
 
 From then on, Orchid opens with a normal double-click. ✨
+
+### Windows
+
+Orchid supports Windows and can be packaged as a Windows executable.
+
+To build it locally:
+
+```bash
+npm run dist:win
+```
+
+The Windows build produces an installer and a portable executable in the `dist/` directory.
+
+Download the latest Windows `.exe` from the [**Releases page**](https://github.com/avnat/orchid/releases/latest).
 
 <details>
 <summary>Rare: it says "damaged" or won't open</summary>
@@ -109,24 +126,24 @@ Orchid follows your system appearance — **Bloom** (light) and **Dusk** (dark) 
 
 ## Keyboard shortcuts
 
-| Action | Shortcut |
+| Action | macOS | Windows |
 |---|---|
-| Open a folder or file | `⌘O` |
-| Add a folder to the workspace | `⇧⌘O` |
-| New window | `⌥⌘N` |
-| Close tab | `⌘W` |
-| Next / previous tab | `⌃Tab` / `⌃⇧Tab` |
-| Jump to tab *n* (last: `⌘9`) | `⌘1`–`⌘9` |
-| Refresh (re-scan) | `⌘R` |
-| Jump to a file | `⌘P` |
-| Find in this file | `⌘F` |
-| Find across all files | `⌘⇧F` |
-| Preview ⇄ Edit | `⌘E` |
-| Save | `⌘S` |
-| Toggle sidebar / contents | `⌘.` / `⌘⌥.` |
-| Keyboard shortcuts | `⌘/` |
+| Open a folder or file | `⌘O` | `Ctrl+O` |
+| Add a folder to the workspace | `⇧⌘O` | `Ctrl+Shift+O` |
+| New window | `⌥⌘N` | `Ctrl+Alt+N` |
+| Close tab | `⌘W` | `Ctrl+W` |
+| Next / previous tab | `⌃Tab` / `⌃⇧Tab` | `Ctrl+Tab` / `Ctrl+Shift+Tab` |
+| Jump to tab *n* (last: `⌘9`) | `⌘1`–`⌘9` | `Ctrl+1`–`Ctrl+9` |
+| Refresh (re-scan) | `⌘R` | `Ctrl+R` |
+| Jump to a file | `⌘P` | `Ctrl+P` |
+| Find in this file | `⌘F` | `Ctrl+F` |
+| Find across all files | `⌘⇧F` | `Ctrl+Shift+F` |
+| Preview ⇄ Edit | `⌘E` | `Ctrl+E` |
+| Save | `⌘S` | `Ctrl+S` |
+| Toggle sidebar / contents | `⌘.` / `⌘⌥.` | `Ctrl+.` / `Ctrl+Alt+.` |
+| Keyboard shortcuts | `⌘/` | `Ctrl+/` |
 
-**Every shortcut is customisable** — open **Settings** (`⌘,` or the gear in the titlebar), click a command, and press the keys you want. On a Windows-style keyboard you can bind `Ctrl`-based shortcuts (macOS treats `⌘` and `Ctrl` as distinct).
+**Every shortcut is customisable** — open **Settings** (`⌘,` on macOS or the Settings control on Windows), click a command, and press the keys you want.
 
 > Tip: drag a folder or file onto the window, right-click a file to reveal/trash it, or ⌘-click several files to delete them together.
 
@@ -138,7 +155,8 @@ cd orchid
 npm install
 npm run dev      # launch with hot reload
 npm run build    # bundle to out/
-npm run dist     # package a signed .dmg into dist/
+npm run dist     # package for macOS
+npm run dist:win  # package for Windows (.exe)
 ```
 
 See [`CONCEPT.md`](CONCEPT.md) for the design rationale, and the in-app **Help → Contributing & Developer Info**.
@@ -147,7 +165,7 @@ See [`CONCEPT.md`](CONCEPT.md) for the design rationale, and the in-app **Help �
 
 Builds are produced by **GitHub Actions**, not by hand:
 
-- Each release is **tagged** `vX.Y.Z`. Pushing that tag triggers the release workflow, which builds the macOS (Apple Silicon) `.dmg`, ad-hoc signs it, and publishes a **GitHub Release** with the dmg attached.
+- Each release is **tagged** `vX.Y.Z`. Pushing that tag triggers the release workflow, which builds the supported macOS and Windows packages and publishes a **GitHub Release** with the artifacts attached.
 - The newest stable build is always at **[/releases/latest](https://github.com/avnat/orchid/releases/latest)** — that's the one to download (and the **Download** badge above links straight to it).
 - Every past version stays on the **[Releases page](https://github.com/avnat/orchid/releases)**, so you can always go back to an older build. Build logs live under the **[Actions tab](https://github.com/avnat/orchid/actions)**.
 - Release candidates are tagged `vX.Y.Z-rc.N` and published as **prereleases** — testable, but never marked "latest" (and skipped by the in-app updater).
