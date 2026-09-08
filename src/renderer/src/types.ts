@@ -27,6 +27,7 @@ export interface RecentEntry {
 }
 
 export interface OrchidApi {
+  platform: NodeJS.Platform
   open: () => Promise<void>
   addFolder: () => Promise<void>
   addAny: () => Promise<void>

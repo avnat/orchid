@@ -17,6 +17,9 @@
   border-bottom: 1px solid var(--line);
   user-select: none;
 }
+.windows-titlebar {
+  padding-right: 148px;
+}
 .titlebar .title {
   grid-column: 2;
   font-size: 12.5px;
